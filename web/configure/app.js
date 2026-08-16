@@ -9,13 +9,43 @@ async function loadConfig() {
   render();
 }
 
+async function errorDetail(response) {
+  try {
+    const body = await response.json();
+    if (body && body.detail !== undefined) {
+      return typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+    }
+    return JSON.stringify(body);
+  } catch (e) {
+    return "";
+  }
+}
+
 async function saveConfig() {
-  await fetch(`/api/config?token=${TOKEN}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(config),
-  });
+  let response;
+  try {
+    response = await fetch(`/api/config?token=${TOKEN}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+  } catch (e) {
+    alert(`Kaydedilemedi: ${e}`);
+    return;
+  }
+
+  if (!response.ok) {
+    const detail = await errorDetail(response);
+    alert(`Kaydedilemedi (HTTP ${response.status})${detail ? `: ${detail}` : ""}`);
+    return;
+  }
+
   alert("Kaydedildi");
+}
+
+function renderQr() {
+  const img = document.getElementById("qr");
+  if (img) img.src = `/api/qr?token=${encodeURIComponent(TOKEN)}`;
 }
 
 function render() {
@@ -91,4 +121,5 @@ document.getElementById("add-page").addEventListener("click", () => {
 
 document.getElementById("save").addEventListener("click", saveConfig);
 
+renderQr();
 loadConfig();
