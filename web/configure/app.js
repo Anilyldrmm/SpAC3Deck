@@ -23,7 +23,9 @@ function render() {
   pagesEl.innerHTML = "";
   config.pages.forEach((page, pageIndex) => {
     const pageEl = document.createElement("fieldset");
-    pageEl.innerHTML = `<legend>${page.name}</legend>`;
+    const legend = document.createElement("legend");
+    legend.textContent = page.name;
+    pageEl.appendChild(legend);
 
     const buttonList = document.createElement("div");
     page.buttons.forEach((button, buttonIndex) => {
