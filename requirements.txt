@@ -1,1 +1,2 @@
 keyboard>=0.13.5
+voicemeeter-api>=2.0.0
