@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import secrets
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 from .config import DeckConfig, load_config, save_config
-from .state import generate_pin
+from .state import generate_pin, compute_diff
 from .actions.context import ActionContext
 from .actions.registry import dispatch
 from .ws import ConnectionManager
@@ -50,6 +51,29 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
                     if button.id == button_id:
                         return button
         return None
+
+    app.state.last_voicemeeter_state = {}
+    app.state.voicemeeter_client = None  # Task 12'de RealVoicemeeterBackend ile doldurulur
+    app.state.voicemeeter_strip_indices: list[int] = []  # poll edilecek strip'ler, config'den Task 12'de doldurulur
+
+    async def _poll_voicemeeter():
+        while True:
+            await asyncio.sleep(0.5)
+            client = app.state.voicemeeter_client
+            if client is None:
+                continue
+            new_state = {}
+            for strip_index in app.state.voicemeeter_strip_indices:
+                new_state[f"strip{strip_index}_mute"] = client.get_mute_state(strip_index)
+                new_state[f"strip{strip_index}_gain"] = client.get_gain_state(strip_index)
+            diff = compute_diff(app.state.last_voicemeeter_state, new_state)
+            if diff:
+                app.state.last_voicemeeter_state.update(diff)
+                await app.state.manager.broadcast({"type": "state", "data": diff})
+
+    @app.on_event("startup")
+    async def _start_poller():
+        asyncio.create_task(_poll_voicemeeter())
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket, token: str):
