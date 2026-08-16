@@ -507,7 +507,7 @@ git commit -m "feat: gercek OS koprusu (hotkey/launch_uri)"
 - Test: `tests/test_voicemeeter_client.py`
 
 **Interfaces:**
-- Produces: `VoicemeeterBackend` Protocol (`set_mute`, `get_mute`, `set_gain`, `get_gain`, `set_route`, `get_route`), `VoicemeeterClient(backend).toggle_mute(strip_index) -> bool`, `.set_gain(strip_index, value) -> None`, `.toggle_route(strip_index, bus) -> bool`. Action tipleri: `"voicemeeter_mute"`, `"voicemeeter_gain"` (event `"set"`, `params["value"]` zorunlu), `"voicemeeter_route"` (`params["bus"]` ∈ `{A1,A2,A3,B1,B2,B3}`).
+- Produces: `VoicemeeterBackend` Protocol (`set_mute`, `get_mute`, `set_gain`, `get_gain`, `set_route`, `get_route`), `VoicemeeterClient(backend).toggle_mute(strip_index) -> bool`, `.set_gain(strip_index, value) -> None`, `.toggle_route(strip_index, bus) -> bool`, `.get_mute_state(strip_index) -> bool`, `.get_gain_state(strip_index) -> float` (Task 11'in state poller'ı bu ikisini kullanır, `_backend`'e doğrudan erişmez). Action tipleri: `"voicemeeter_mute"`, `"voicemeeter_gain"` (event `"set"`, `params["value"]` zorunlu), `"voicemeeter_route"` (`params["bus"]` ∈ `{A1,A2,A3,B1,B2,B3}`).
 - Consumes: `ActionContext.voicemeeter` (Task 2'den, artık `VoicemeeterClient` örneği taşır).
 
 - [ ] **Step 1: Write the failing test**
@@ -566,6 +566,20 @@ def test_toggle_route_is_independent_per_bus():
     assert client.toggle_route(0, "B1") is True
     assert backend.route[(0, "A1")] is True
     assert backend.route[(0, "B1")] is True
+
+
+def test_get_mute_state_reads_through_backend():
+    backend = FakeBackend()
+    backend.mute[0] = True
+    client = VoicemeeterClient(backend)
+    assert client.get_mute_state(0) is True
+
+
+def test_get_gain_state_reads_through_backend():
+    backend = FakeBackend()
+    backend.gain[0] = -12.0
+    client = VoicemeeterClient(backend)
+    assert client.get_gain_state(0) == -12.0
 
 
 def make_context(voicemeeter_client):
@@ -644,6 +658,12 @@ class VoicemeeterClient:
         new_state = not self._backend.get_route(strip_index, bus)
         self._backend.set_route(strip_index, bus, new_state)
         return new_state
+
+    def get_mute_state(self, strip_index: int) -> bool:
+        return self._backend.get_mute(strip_index)
+
+    def get_gain_state(self, strip_index: int) -> float:
+        return self._backend.get_gain(strip_index)
 ```
 
 ```python
@@ -677,7 +697,7 @@ def handle_voicemeeter_route(params: dict, context, event: str):
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_voicemeeter_client.py -v`
-Expected: PASS (6 passed)
+Expected: PASS (8 passed)
 
 - [ ] **Step 5: Commit**
 
@@ -1292,8 +1312,8 @@ Gerçek Voicemeeter bağımlılığı gerektirdiği için bu task'ın background
                 continue
             new_state = {}
             for strip_index in app.state.voicemeeter_strip_indices:
-                new_state[f"strip{strip_index}_mute"] = client._backend.get_mute(strip_index)
-                new_state[f"strip{strip_index}_gain"] = client._backend.get_gain(strip_index)
+                new_state[f"strip{strip_index}_mute"] = client.get_mute_state(strip_index)
+                new_state[f"strip{strip_index}_gain"] = client.get_gain_state(strip_index)
             diff = compute_diff(app.state.last_voicemeeter_state, new_state)
             if diff:
                 app.state.last_voicemeeter_state.update(diff)
