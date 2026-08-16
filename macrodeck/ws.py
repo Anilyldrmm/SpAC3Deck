@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
 from fastapi import WebSocket
+from starlette.websockets import WebSocketState
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -16,5 +20,13 @@ class ConnectionManager:
             self.active.remove(websocket)
 
     async def broadcast(self, message: dict) -> None:
+        dead_sockets = []
         for websocket in list(self.active):
-            await websocket.send_json(message)
+            try:
+                if websocket.application_state == WebSocketState.CONNECTED:
+                    await websocket.send_json(message)
+            except Exception as e:
+                logger.debug(f"Failed to send to socket: {e}")
+                dead_sockets.append(websocket)
+        for ws in dead_sockets:
+            self.disconnect(ws)
