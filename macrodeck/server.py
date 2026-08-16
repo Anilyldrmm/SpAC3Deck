@@ -160,3 +160,33 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
     app.mount("/configure", StaticFiles(directory=web_root / "configure", html=True), name="configure")
 
     return app
+
+
+def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
+    from . import os_bridge
+    from .voicemeeter_backend import RealVoicemeeterBackend
+    from .voicemeeter_client import VoicemeeterClient
+    from .discord_automation import PywinautoScreenShareAutomation
+    from .discord_screenshare import DiscordScreenShareController
+
+    backend = RealVoicemeeterBackend(kind=voicemeeter_kind)
+    voicemeeter_client = VoicemeeterClient(backend)
+    screenshare = DiscordScreenShareController(PywinautoScreenShareAutomation())
+
+    app.state.action_context = ActionContext(
+        send_hotkey=os_bridge.send_hotkey,
+        hold_key=os_bridge.hold_key,
+        release_key=os_bridge.release_key,
+        launch_uri=os_bridge.launch_uri,
+        voicemeeter=voicemeeter_client,
+        screenshare=screenshare,
+    )
+    app.state.voicemeeter_client = voicemeeter_client
+
+    config = load_config(app.state.config_path)
+    strip_indices = set()
+    for page in config.pages:
+        for button in page.buttons:
+            if button.action.startswith("voicemeeter_"):
+                strip_indices.add(button.params.get("strip_index", 0))
+    app.state.voicemeeter_strip_indices = sorted(strip_indices)
