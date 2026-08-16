@@ -1,0 +1,16 @@
+{
+  "pages": [
+    {
+      "name": "Genel",
+      "buttons": [
+        {"id": "discord-mute", "label": "Mute", "icon": "🎙️", "action": "hotkey", "params": {"keys": ["ctrl", "shift", "m"]}},
+        {"id": "discord-deafen", "label": "Deafen", "icon": "🔇", "action": "hotkey", "params": {"keys": ["ctrl", "shift", "d"]}},
+        {"id": "discord-share1", "label": "Ekran 1 Paylaş", "icon": "🖥️", "action": "discord_screenshare", "params": {"monitor_index": 0}},
+        {"id": "vm-strip0-mute", "label": "Mic Mute", "icon": "🎚️", "action": "voicemeeter_mute", "params": {"strip_index": 0}},
+        {"id": "vm-strip0-gain", "label": "Mic Gain", "icon": "🔊", "action": "voicemeeter_gain", "params": {"strip_index": 0}},
+        {"id": "vm-strip0-a1", "label": "→A1", "icon": "🔀", "action": "voicemeeter_route", "params": {"strip_index": 0, "bus": "A1"}},
+        {"id": "vm-strip0-b1", "label": "→B1", "icon": "🔀", "action": "voicemeeter_route", "params": {"strip_index": 0, "bus": "B1"}}
+      ]
+    }
+  ]
+}
