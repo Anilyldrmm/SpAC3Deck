@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -14,7 +15,7 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
     app.state.pin = pin or generate_pin()
 
     def _check_pin(token: str | None) -> None:
-        if token != app.state.pin:
+        if token is None or not secrets.compare_digest(token, app.state.pin):
             raise HTTPException(status_code=403, detail="invalid pin")
 
     @app.get("/api/config")
