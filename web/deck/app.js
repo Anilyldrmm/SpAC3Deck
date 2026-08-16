@@ -1,5 +1,6 @@
 // web/deck/app.js
 const PIN_STORAGE_KEY = "macrodeck_pin";
+const VOICEMEETER_ACTIONS = ["voicemeeter_mute", "voicemeeter_gain", "voicemeeter_route"];
 
 const pinGate = document.getElementById("pin-gate");
 const pinInput = document.getElementById("pin-input");
@@ -11,6 +12,8 @@ const gridEl = document.getElementById("button-grid");
 let config = null;
 let currentPage = 0;
 let socket = null;
+let currentPin = null;
+let lastState = {};
 
 function getStoredPin() {
   const params = new URLSearchParams(window.location.search);
@@ -24,12 +27,23 @@ async function connectWithPin(pin) {
     return;
   }
   config = await response.json();
+  currentPin = pin;
   localStorage.setItem(PIN_STORAGE_KEY, pin);
   pinGate.hidden = true;
   deckEl.hidden = false;
   renderTabs();
   renderPage(0);
   openSocket(pin);
+}
+
+async function reloadConfig() {
+  if (!currentPin) return;
+  const response = await fetch(`/api/config?token=${encodeURIComponent(currentPin)}`);
+  if (!response.ok) return;
+  config = await response.json();
+  if (currentPage >= config.pages.length) currentPage = 0;
+  renderTabs();
+  renderPage(currentPage);
 }
 
 function renderTabs() {
@@ -47,13 +61,24 @@ function renderTabs() {
   });
 }
 
+function stripIndexOf(button) {
+  const params = button.params || {};
+  return params.strip_index === undefined || params.strip_index === null ? 0 : params.strip_index;
+}
+
 function renderPage(index) {
   gridEl.innerHTML = "";
   const page = config.pages[index];
+  if (!page) return;
   page.buttons.forEach((button) => {
     const el = document.createElement("button");
     el.className = "deck-button";
     el.dataset.buttonId = button.id;
+
+    if (VOICEMEETER_ACTIONS.includes(button.action)) {
+      el.dataset.stripIndex = String(stripIndexOf(button));
+      el.dataset.kind = button.action === "voicemeeter_mute" ? "mute" : button.action === "voicemeeter_gain" ? "gain-control" : "route";
+    }
 
     const iconEl = document.createElement("span");
     iconEl.className = "icon";
@@ -76,6 +101,9 @@ function renderPage(index) {
       slider.min = "-60";
       slider.max = "12";
       slider.step = "0.5";
+      // state broadcast'i slider'i bulabilsin diye
+      slider.dataset.stripIndex = String(stripIndexOf(button));
+      slider.dataset.kind = "gain";
       slider.addEventListener("input", () => {
         sendEvent(page.name, button.id, "set", parseFloat(slider.value));
       });
@@ -86,6 +114,9 @@ function renderPage(index) {
 
     gridEl.appendChild(el);
   });
+
+  // yeniden cizimden sonra bilinen son durumu geri uygula
+  applyStateDiff(lastState);
 }
 
 function sendEvent(pageName, buttonId, event, value) {
@@ -101,18 +132,28 @@ function openSocket(pin) {
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
     if (message.type === "state") {
+      Object.assign(lastState, message.data);
       applyStateDiff(message.data);
+    } else if (message.type === "reload") {
+      reloadConfig();
     }
   });
 }
 
 function applyStateDiff(diff) {
   Object.entries(diff).forEach(([key, value]) => {
-    const match = key.match(/^strip(\d+)_mute$/);
-    if (match) {
-      const stripIndex = match[1];
-      const el = document.querySelector(`[data-strip-index="${stripIndex}"][data-kind="mute"]`);
+    const muteMatch = key.match(/^strip(\d+)_mute$/);
+    if (muteMatch) {
+      const el = document.querySelector(`[data-strip-index="${muteMatch[1]}"][data-kind="mute"]`);
       if (el) el.classList.toggle("active", Boolean(value));
+      return;
+    }
+
+    const gainMatch = key.match(/^strip(\d+)_gain$/);
+    if (gainMatch) {
+      const slider = document.querySelector(`input[data-strip-index="${gainMatch[1]}"][data-kind="gain"]`);
+      // kullanici o an slider'i tutuyorsa degerini ezme
+      if (slider && document.activeElement !== slider) slider.value = String(value);
     }
   });
 }
