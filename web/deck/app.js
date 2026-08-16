@@ -54,7 +54,16 @@ function renderPage(index) {
     const el = document.createElement("button");
     el.className = "deck-button";
     el.dataset.buttonId = button.id;
-    el.innerHTML = `<span class="icon">${button.icon}</span><span class="label">${button.label}</span>`;
+
+    const iconEl = document.createElement("span");
+    iconEl.className = "icon";
+    iconEl.textContent = button.icon;
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "label";
+    labelEl.textContent = button.label;
+
+    el.append(iconEl, labelEl);
 
     if (button.action === "hotkey_hold") {
       el.addEventListener("touchstart", () => sendEvent(page.name, button.id, "press"));
