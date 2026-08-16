@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 from macrodeck.config import Button, Page, DeckConfig, save_config
 from macrodeck.server import create_app
 from macrodeck.actions.context import ActionContext
@@ -7,7 +8,7 @@ import macrodeck.actions.hotkey  # noqa: F401
 import pytest
 
 
-def build_client(tmp_path):
+def build_client(tmp_path, lan_ip=None, port=8765):
     config_path = tmp_path / "deck.json"
     save_config(
         DeckConfig(pages=[Page(name="Genel", buttons=[
@@ -15,7 +16,7 @@ def build_client(tmp_path):
         ])]),
         config_path,
     )
-    app = create_app(config_path=config_path, pin="1234")
+    app = create_app(config_path=config_path, pin="1234", lan_ip=lan_ip, port=port)
 
     recorder = {"send_hotkey": []}
     app.state.action_context = ActionContext(
@@ -40,49 +41,60 @@ def test_ws_press_dispatches_configured_action(tmp_path):
 
 def test_ws_rejects_wrong_pin(tmp_path):
     client, _ = build_client(tmp_path)
-    try:
+    with pytest.raises(WebSocketDisconnect) as excinfo:
         with client.websocket_connect("/ws?token=0000"):
             pass
-        assert False, "baglanti kabul edilmemeliydi"
-    except Exception:
-        pass
+    assert excinfo.value.code == 4403
 
 
-def test_ws_rejects_mismatched_origin(tmp_path):
-    """Test that WebSocket connection with mismatched Origin header is rejected"""
-    client, _ = build_client(tmp_path)
-    try:
-        # Try to connect with a different origin header
-        with client.websocket_connect("/ws?token=1234", headers={"Origin": "http://evil.com:8000"}):
+def test_ws_rejects_disallowed_origin(tmp_path):
+    """Origin allowlist'te olmayan sayfa dogru PIN ile bile baglanamamali (CSWSH)."""
+    client, _ = build_client(tmp_path, lan_ip="192.168.1.10")
+    with pytest.raises(WebSocketDisconnect) as excinfo:
+        with client.websocket_connect(
+            "/ws?token=1234", headers={"Origin": "http://evil.com:8000"}
+        ):
             pass
-        assert False, "mismatched origin should be rejected"
-    except Exception:
-        pass
+    assert excinfo.value.code == 4403
+
+
+def test_ws_rejects_origin_matching_host_header(tmp_path):
+    """DNS rebinding: Origin ile Host ayni olsa bile allowlist disi ise reddedilir."""
+    client, _ = build_client(tmp_path, lan_ip="192.168.1.10")
+    with pytest.raises(WebSocketDisconnect) as excinfo:
+        with client.websocket_connect(
+            "/ws?token=1234",
+            headers={"Origin": "http://evil.com", "Host": "evil.com"},
+        ):
+            pass
+    assert excinfo.value.code == 4403
+
+
+def test_ws_accepts_allowlisted_origin(tmp_path):
+    client, recorder = build_client(tmp_path, lan_ip="192.168.1.10", port=8765)
+    with client.websocket_connect(
+        "/ws?token=1234", headers={"Origin": "http://192.168.1.10:8765"}
+    ) as ws:
+        ws.send_json({"page": "Genel", "button_id": "b1", "event": "press"})
+    assert recorder["send_hotkey"] == [["ctrl", "m"]]
 
 
 def test_ws_rate_limits_failed_pin_attempts(tmp_path):
-    """Test that after N failed PIN attempts from the same IP, further attempts are rejected"""
+    """N hatali PIN denemesinden sonra dogru PIN bile bir sure reddedilmeli."""
     client, _ = build_client(tmp_path)
     app = client.app
+    app.state.rate_limiter.threshold = 3
 
-    # Lower the threshold for testing
-    app.state.ws_rate_limit_threshold = 3
-
-    # Attempt connection 3 times with wrong PIN (should fail)
-    for i in range(3):
-        try:
+    for _ in range(3):
+        with pytest.raises(WebSocketDisconnect) as excinfo:
             with client.websocket_connect("/ws?token=0000"):
                 pass
-        except Exception:
-            pass
+        assert excinfo.value.code == 4403
 
-    # Now try with correct PIN - should be rate-limited
-    try:
+    with pytest.raises(WebSocketDisconnect) as excinfo:
         with client.websocket_connect("/ws?token=1234"):
             pass
-        assert False, "connection should be rate-limited after failed attempts"
-    except Exception:
-        pass
+    assert excinfo.value.code == 4429
 
 
 def test_ws_malformed_message_does_not_crash_connection(tmp_path):
@@ -100,6 +112,19 @@ def test_ws_malformed_message_does_not_crash_connection(tmp_path):
 
     # Should have dispatched 2 actions (the valid ones)
     assert recorder["send_hotkey"] == [["ctrl", "m"], ["ctrl", "m"]]
+
+
+def test_put_config_broadcasts_reload_to_connected_clients(tmp_path):
+    """Kaydet -> bagli telefonlara WS uzerinden reload sinyali gider."""
+    client, _ = build_client(tmp_path)
+    with client.websocket_connect("/ws?token=1234") as ws:
+        response = client.put(
+            "/api/config",
+            params={"token": "1234"},
+            json={"pages": [{"name": "Yeni", "buttons": []}]},
+        )
+        assert response.status_code == 200
+        assert ws.receive_json() == {"type": "reload"}
 
 
 @pytest.mark.asyncio
