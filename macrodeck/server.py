@@ -157,5 +157,6 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
 
     web_root = Path(__file__).resolve().parent.parent / "web"
     app.mount("/deck", StaticFiles(directory=web_root / "deck", html=True), name="deck")
+    app.mount("/configure", StaticFiles(directory=web_root / "configure", html=True), name="configure")
 
     return app

@@ -1,0 +1,5 @@
+/* web/configure/style.css */
+body { font-family: system-ui, sans-serif; padding: 16px; }
+fieldset { margin-bottom: 16px; }
+.button-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.button-row input { flex: 1; }
