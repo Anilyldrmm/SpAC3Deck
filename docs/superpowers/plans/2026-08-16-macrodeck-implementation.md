@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Sadece LAN üzerinde çalışır, internete açılmaz (spec: Güvenlik).
-- Her bağlantı PIN ile korunur.
+- Her bağlantı PIN ile korunur. PIN karşılaştırması her yerde `secrets.compare_digest` ile sabit-zamanlı yapılır (timing attack'a karşı; Task 9 fix round'unda eklendi).
 - Config dosyası: `config/deck.json`, Pydantic modelleriyle okunur/yazılır.
 - Action handler'lar registry pattern: `actions/<type>.py` içinde `@register("type_name")` (spec: Genişletilebilirlik).
 - Discord mute/deafen: kullanıcının Discord'da tanımladığı global hotkey simüle edilir, token kullanılmaz.
@@ -1075,6 +1075,8 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'macrodeck.server'`
 # macrodeck/server.py
 from __future__ import annotations
 
+import secrets
+
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -1088,17 +1090,17 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
     app.state.config_path = config_path
     app.state.pin = pin or generate_pin()
 
-    def _check_pin(token: str) -> None:
-        if token != app.state.pin:
+    def _check_pin(token: str | None) -> None:
+        if token is None or not secrets.compare_digest(token, app.state.pin):
             raise HTTPException(status_code=403, detail="invalid pin")
 
     @app.get("/api/config")
-    def get_config(token: str):
+    def get_config(token: str | None = None):
         _check_pin(token)
         return load_config(app.state.config_path).model_dump()
 
     @app.put("/api/config")
-    def put_config(payload: dict, token: str):
+    def put_config(payload: dict, token: str | None = None):
         _check_pin(token)
         config = DeckConfig.model_validate(payload)
         save_config(config, app.state.config_path)
@@ -1249,7 +1251,7 @@ from .ws import ConnectionManager
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket, token: str):
-        if token != app.state.pin:
+        if not secrets.compare_digest(token, app.state.pin):
             await websocket.close(code=4403)
             return
         await app.state.manager.connect(websocket)
