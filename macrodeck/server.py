@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
@@ -153,5 +154,8 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
             pass
         finally:
             app.state.manager.disconnect(websocket)
+
+    web_root = Path(__file__).resolve().parent.parent / "web"
+    app.mount("/deck", StaticFiles(directory=web_root / "deck", html=True), name="deck")
 
     return app

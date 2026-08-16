@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>MacroDeck</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="pin-gate">
+    <input id="pin-input" type="text" inputmode="numeric" placeholder="PIN" maxlength="4" />
+    <button id="pin-submit">Bağlan</button>
+  </div>
+  <div id="deck" hidden>
+    <nav id="page-tabs"></nav>
+    <main id="button-grid"></main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
