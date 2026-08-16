@@ -14,7 +14,12 @@ def _make_icon_image():
     return image
 
 
-def start_tray(on_open_configurator, on_quit) -> None:
+def start_tray(on_open_configurator, on_quit) -> pystray.Icon:
+    """Tray icon'u kendi thread'inde baslatir ve icon nesnesini doner.
+
+    `on_open_configurator` sadece pencere olusturmali; GUI dongusu (webview.start)
+    main thread'de bir kez calisir. `on_quit(icon)` tum kapatma islerinden sorumlu.
+    """
     icon = pystray.Icon(
         "macrodeck",
         _make_icon_image(),
@@ -25,3 +30,4 @@ def start_tray(on_open_configurator, on_quit) -> None:
         ),
     )
     threading.Thread(target=icon.run, daemon=True).start()
+    return icon
