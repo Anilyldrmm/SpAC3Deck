@@ -2,42 +2,128 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-import time
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
 from .config import DeckConfig, load_config, save_config
+from .qr import generate_deck_url, generate_qr_png
+from .security import AttemptLimiter, build_allowed_origins, origin_allowed
 from .state import generate_pin, compute_diff
 from .actions.context import ActionContext
 from .actions.registry import dispatch
 from .ws import ConnectionManager
 
+DEFAULT_PORT = 8765
 
-def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
+AUTH_OK = "ok"
+AUTH_BAD_ORIGIN = "bad_origin"
+AUTH_RATE_LIMITED = "rate_limited"
+AUTH_BAD_PIN = "bad_pin"
+
+
+def compute_strip_indices(config: DeckConfig) -> list[int]:
+    """Config'deki voicemeeter butonlarindan poll edilecek strip listesini cikarir."""
+    strip_indices = set()
+    for page in config.pages:
+        for button in page.buttons:
+            if button.action.startswith("voicemeeter_"):
+                strip_indices.add(button.params.get("strip_index", 0))
+    return sorted(strip_indices)
+
+
+def create_app(
+    config_path: Path,
+    pin: str | None = None,
+    lan_ip: str | None = None,
+    port: int = DEFAULT_PORT,
+) -> FastAPI:
     app = FastAPI()
     app.state.config_path = config_path
     app.state.pin = pin or generate_pin()
+    app.state.lan_ip = lan_ip
+    app.state.port = port
+    app.state.rate_limiter = AttemptLimiter()
+    app.state.allowed_origins = build_allowed_origins(
+        ["localhost", "127.0.0.1", lan_ip], port
+    )
 
-    def _check_pin(token: str | None) -> None:
-        if token is None or not secrets.compare_digest(token, app.state.pin):
+    def _pin_matches(token: str | None) -> bool:
+        if token is None:
+            return False
+        # compare_digest ASCII disi str ile TypeError atar; bytes ile karsilastir
+        return secrets.compare_digest(token.encode("utf-8"), app.state.pin.encode("utf-8"))
+
+    def _authorize(client_ip: str, origin: str | None, token: str | None) -> str:
+        """REST ve WS icin ortak: origin allowlist -> rate limit -> PIN."""
+        if not origin_allowed(origin, app.state.allowed_origins):
+            logger.warning("origin reddedildi: %s (%s)", origin, client_ip)
+            return AUTH_BAD_ORIGIN
+
+        limiter: AttemptLimiter = app.state.rate_limiter
+        if limiter.is_locked(client_ip):
+            logger.warning("rate limit: %s kilitli", client_ip)
+            return AUTH_RATE_LIMITED
+
+        if not _pin_matches(token):
+            locked = limiter.record_failure(client_ip)
+            logger.warning("hatali pin: %s%s", client_ip, " (kilitlendi)" if locked else "")
+            return AUTH_BAD_PIN
+
+        limiter.reset(client_ip)
+        return AUTH_OK
+
+    def _require_auth(request: Request, token: str | None) -> None:
+        client_ip = request.client.host if request.client else "unknown"
+        result = _authorize(client_ip, request.headers.get("origin"), token)
+        if result == AUTH_RATE_LIMITED:
+            retry_after = app.state.rate_limiter.retry_after(client_ip)
+            raise HTTPException(
+                status_code=429,
+                detail="too many failed attempts",
+                headers={"Retry-After": str(retry_after or 1)},
+            )
+        if result == AUTH_BAD_ORIGIN:
+            raise HTTPException(status_code=403, detail="origin not allowed")
+        if result != AUTH_OK:
             raise HTTPException(status_code=403, detail="invalid pin")
 
     @app.get("/api/config")
-    def get_config(token: str | None = None):
-        _check_pin(token)
+    def get_config(request: Request, token: str | None = None):
+        _require_auth(request, token)
         return load_config(app.state.config_path).model_dump()
 
     @app.put("/api/config")
-    def put_config(payload: dict, token: str | None = None):
-        _check_pin(token)
-        config = DeckConfig.model_validate(payload)
+    async def put_config(request: Request, payload: dict, token: str | None = None):
+        _require_auth(request, token)
+        try:
+            config = DeckConfig.model_validate(payload)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=exc.errors(include_url=False, include_context=False),
+            )
         save_config(config, app.state.config_path)
+        # yeni config'deki strip'ler restart beklemeden poll edilsin
+        app.state.voicemeeter_strip_indices = compute_strip_indices(config)
+        await app.state.manager.broadcast({"type": "reload"})
         return {"status": "ok"}
+
+    @app.get("/api/qr")
+    def get_qr(request: Request, token: str | None = None):
+        _require_auth(request, token)
+        host = app.state.lan_ip or request.url.hostname or "127.0.0.1"
+        png = generate_qr_png(generate_deck_url(host, app.state.port, app.state.pin))
+        return Response(
+            content=png,
+            media_type="image/png",
+            headers={"Cache-Control": "no-store"},
+        )
 
     app.state.manager = ConnectionManager()
     app.state.action_context = ActionContext(
@@ -58,12 +144,9 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
         return None
 
     app.state.last_voicemeeter_state = {}
-    app.state.voicemeeter_client = None  # Task 12'de RealVoicemeeterBackend ile doldurulur
-    app.state.voicemeeter_strip_indices: list[int] = []  # poll edilecek strip'ler, config'den Task 12'de doldurulur
-    app.state.ws_failed_attempts: dict[str, tuple[int, float]] = {}  # {ip: (count, first_timestamp)}
-    app.state.ws_rate_limit_threshold = 10
-    app.state.ws_rate_limit_window = 60
-    app.state.ws_rate_limit_lockout = 30
+    app.state.voicemeeter_client = None  # configure_runtime doldurur
+    app.state.voicemeeter_backend = None
+    app.state.voicemeeter_strip_indices: list[int] = []
 
     async def _poll_voicemeeter():
         while True:
@@ -87,46 +170,13 @@ def create_app(config_path: Path, pin: str | None = None) -> FastAPI:
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket, token: str):
         client_ip = websocket.client.host if websocket.client else "unknown"
-
-        # Check origin header for CSWSH protection
-        origin_header = websocket.headers.get("origin", "")
-        if origin_header:
-            host_header = websocket.headers.get("host", "")
-            origin_host = origin_header.split("://", 1)[-1].split("/")[0]
-            if origin_host != host_header:
-                logger.warning(f"WebSocket origin mismatch: {origin_header} vs {host_header}")
-                await websocket.close(code=4403)
-                return
-
-        # Check rate limiting on failed PIN attempts
-        now = time.monotonic()
-        if client_ip in app.state.ws_failed_attempts:
-            fail_count, first_fail = app.state.ws_failed_attempts[client_ip]
-            if now - first_fail < app.state.ws_rate_limit_window:
-                if fail_count >= app.state.ws_rate_limit_threshold:
-                    logger.warning(f"Rate limit exceeded for {client_ip}: {fail_count} failed attempts")
-                    await websocket.close(code=4429)
-                    return
-            else:
-                del app.state.ws_failed_attempts[client_ip]
-
-        # Validate PIN
-        if not secrets.compare_digest(token, app.state.pin):
-            if client_ip not in app.state.ws_failed_attempts:
-                app.state.ws_failed_attempts[client_ip] = (1, now)
-            else:
-                count, first_fail = app.state.ws_failed_attempts[client_ip]
-                if now - first_fail < app.state.ws_rate_limit_window:
-                    app.state.ws_failed_attempts[client_ip] = (count + 1, first_fail)
-                else:
-                    app.state.ws_failed_attempts[client_ip] = (1, now)
-
+        result = _authorize(client_ip, websocket.headers.get("origin"), token)
+        if result == AUTH_RATE_LIMITED:
+            await websocket.close(code=4429)
+            return
+        if result != AUTH_OK:
             await websocket.close(code=4403)
             return
-
-        # Clear failed attempts on successful auth
-        if client_ip in app.state.ws_failed_attempts:
-            del app.state.ws_failed_attempts[client_ip]
 
         await app.state.manager.connect(websocket)
         try:
@@ -169,8 +219,19 @@ def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
     from .discord_automation import PywinautoScreenShareAutomation
     from .discord_screenshare import DiscordScreenShareController
 
-    backend = RealVoicemeeterBackend(kind=voicemeeter_kind)
-    voicemeeter_client = VoicemeeterClient(backend)
+    # Voicemeeter kurulu/acik olmayabilir; bu durumda diger entegrasyonlar calismaya devam etmeli
+    backend = None
+    voicemeeter_client = None
+    try:
+        backend = RealVoicemeeterBackend(kind=voicemeeter_kind)
+        voicemeeter_client = VoicemeeterClient(backend)
+    except Exception as exc:
+        logger.warning(
+            "voicemeeter baglanamadi, voicemeeter butonlari devre disi: %s", exc
+        )
+        backend = None
+        voicemeeter_client = None
+
     screenshare = DiscordScreenShareController(PywinautoScreenShareAutomation())
 
     app.state.action_context = ActionContext(
@@ -182,11 +243,8 @@ def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
         screenshare=screenshare,
     )
     app.state.voicemeeter_client = voicemeeter_client
+    app.state.voicemeeter_backend = backend
 
-    config = load_config(app.state.config_path)
-    strip_indices = set()
-    for page in config.pages:
-        for button in page.buttons:
-            if button.action.startswith("voicemeeter_"):
-                strip_indices.add(button.params.get("strip_index", 0))
-    app.state.voicemeeter_strip_indices = sorted(strip_indices)
+    app.state.voicemeeter_strip_indices = compute_strip_indices(
+        load_config(app.state.config_path)
+    )
