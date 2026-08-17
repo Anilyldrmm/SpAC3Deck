@@ -1237,20 +1237,27 @@ document.getElementById("autostart-checkbox").addEventListener("change", async (
 // --- disari tiklayinca kapat ---
 
 document.addEventListener("click", (event) => {
-  const target = event.target;
+  // event.target degil composedPath() kullanilir: bir hucreye tiklamak
+  // selectButton() -> renderGrid() zinciriyle o hucreyi ayni click'in
+  // bubble fazi bitmeden DOM'dan sokup yerine yenisini koyuyor. target
+  // artik agactan kopmus oluyor, contains() bu yuzden yanlislikla "disari
+  // tiklandi" sanip paneli az once actigi gibi hemen kapatiyordu.
+  // composedPath() dispatch basinda sabitlenir, sonraki DOM mutasyonundan
+  // etkilenmez.
+  const path = event.composedPath();
 
   ["qr-popover", "bridge-popover", "history-popover", "settings-popover"].forEach((id) => {
     const popover = document.getElementById(id);
     if (popover.hidden) return;
     const toggle = document.getElementById(id.replace("-popover", "-toggle"));
-    if (popover.contains(target) || (toggle && toggle.contains(target))) return;
+    if (path.includes(popover) || (toggle && path.includes(toggle))) return;
     popover.hidden = true;
   });
 
   const inspectorEl = document.getElementById("inspector");
   if (!inspectorEl.hidden) {
     const gridEl = document.getElementById("button-grid");
-    if (!inspectorEl.contains(target) && !gridEl.contains(target)) {
+    if (!path.includes(inspectorEl) && !path.includes(gridEl)) {
       closeInspector();
     }
   }
