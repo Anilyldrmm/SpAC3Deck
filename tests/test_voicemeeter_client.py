@@ -9,6 +9,8 @@ class FakeBackend:
         self.mute = {}
         self.gain = {}
         self.route = {}
+        self.bus_mute = {}
+        self.bus_gain = {}
 
     def get_mute(self, strip_index):
         return self.mute.get(strip_index, False)
@@ -27,6 +29,24 @@ class FakeBackend:
 
     def set_route(self, strip_index, bus, enabled):
         self.route[(strip_index, bus)] = enabled
+
+    def list_strips(self):
+        return [{"index": 0, "label": "Mic"}, {"index": 1, "label": "System"}]
+
+    def get_bus_mute(self, bus_index):
+        return self.bus_mute.get(bus_index, False)
+
+    def set_bus_mute(self, bus_index, muted):
+        self.bus_mute[bus_index] = muted
+
+    def get_bus_gain(self, bus_index):
+        return self.bus_gain.get(bus_index, 0.0)
+
+    def set_bus_gain(self, bus_index, value):
+        self.bus_gain[bus_index] = value
+
+    def list_buses(self):
+        return [{"index": 0, "label": "A1"}, {"index": 1, "label": "B1"}]
 
 
 def test_toggle_mute_flips_state():
@@ -66,6 +86,12 @@ def test_get_gain_state_reads_through_backend():
     assert client.get_gain_state(0) == -12.0
 
 
+def test_list_strips_reads_through_backend():
+    backend = FakeBackend()
+    client = VoicemeeterClient(backend)
+    assert client.list_strips() == [{"index": 0, "label": "Mic"}, {"index": 1, "label": "System"}]
+
+
 def make_context(voicemeeter_client):
     return ActionContext(
         send_hotkey=lambda keys: None,
@@ -101,3 +127,41 @@ def test_dispatch_voicemeeter_route_action():
     context = make_context(client)
     dispatch("voicemeeter_route", {"strip_index": 1, "bus": "A2"}, context, "press")
     assert backend.route[(1, "A2")] is True
+
+
+def test_toggle_bus_mute_flips_state():
+    backend = FakeBackend()
+    client = VoicemeeterClient(backend)
+    assert client.toggle_bus_mute(0) is True
+    assert client.toggle_bus_mute(0) is False
+
+
+def test_set_bus_gain_forwards_value():
+    backend = FakeBackend()
+    client = VoicemeeterClient(backend)
+    client.set_bus_gain(0, -6.5)
+    assert backend.bus_gain[0] == -6.5
+
+
+def test_list_buses_reads_through_backend():
+    backend = FakeBackend()
+    client = VoicemeeterClient(backend)
+    assert client.list_buses() == [{"index": 0, "label": "A1"}, {"index": 1, "label": "B1"}]
+
+
+def test_dispatch_voicemeeter_bus_mute_action():
+    backend = FakeBackend()
+    client = VoicemeeterClient(backend)
+    context = make_context(client)
+    dispatch("voicemeeter_bus_mute", {"bus_index": 0}, context, "press")
+    assert backend.bus_mute[0] is True
+
+
+def test_dispatch_voicemeeter_bus_gain_action_requires_set_event():
+    backend = FakeBackend()
+    client = VoicemeeterClient(backend)
+    context = make_context(client)
+    dispatch("voicemeeter_bus_gain", {"bus_index": 0, "value": -3.0}, context, "set")
+    assert backend.bus_gain[0] == -3.0
+    dispatch("voicemeeter_bus_gain", {"bus_index": 0, "value": 99.0}, context, "press")
+    assert backend.bus_gain[0] == -3.0

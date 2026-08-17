@@ -19,7 +19,16 @@ pytest
 
 ## Config
 
-`config/deck.json` — configurator penceresinden (tray → "Configurator Aç") ya da doğrudan dosyayı düzenleyerek değiştirilir.
+`config/deck.json` — configurator penceresinden (tray → "Configurator Aç") ya da doğrudan dosyayı düzenleyerek değiştirilir. (Paketlenmiş `.exe` ile çalıştırılıyorsa bu dosya `%APPDATA%\MacroDeck\deck.json` konumundadır — bkz. aşağıdaki Paketleme bölümü.)
+
+## Paketleme (tek exe)
+
+```bash
+pip install -r requirements.txt
+pyinstaller MacroDeck.spec
+```
+
+Çıktı `dist/MacroDeck/MacroDeck.exe` — bu klasörün tamamı (exe + `_internal/`) birlikte taşınmalı/kurulmalıdır. Config, bridge token, ikon/ses cache'i `%APPDATA%\MacroDeck\` altına yazılır (Program Files gibi salt-okunur bir konuma kurulsa bile sorun çıkmaz).
 
 ## End-to-End Manual Test Checklist
 

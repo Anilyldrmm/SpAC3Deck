@@ -23,4 +23,4 @@ def test_save_writes_valid_json(tmp_path):
     path = tmp_path / "deck.json"
     save_config(DeckConfig(pages=[]), path)
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data == {"pages": []}
+    assert data == {"pages": [], "grid_columns": 5, "grid_rows": 3}

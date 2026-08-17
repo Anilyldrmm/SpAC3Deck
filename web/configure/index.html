@@ -6,15 +6,81 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>MacroDeck Configurator</h1>
-  <section id="qr-section">
-    <h2>Telefon Bağlantısı</h2>
-    <p>Telefon kamerasıyla okut, deck otomatik açılır.</p>
-    <img id="qr" width="220" height="220" alt="Deck bağlantı QR kodu" />
-  </section>
-  <div id="pages"></div>
-  <button id="add-page">+ Sayfa Ekle</button>
-  <button id="save">Kaydet</button>
+  <header id="topbar">
+    <div id="brand">MacroDeck</div>
+    <nav id="page-tabs"></nav>
+    <button id="add-page" title="Sayfa ekle">+</button>
+    <div id="topbar-spacer"></div>
+    <span id="save-indicator" class="idle">Kaydedildi</span>
+    <span id="pin-display" title="Telefon bağlanırken bu PIN'i gir"></span>
+    <button id="bridge-toggle" class="icon-toggle" title="Discord Bridge">
+      🔗
+      <span id="bridge-dot" class="status-dot"></span>
+    </button>
+    <button id="history-toggle" class="icon-toggle" title="Geri al / Geçmiş">↩️</button>
+    <button id="settings-toggle" class="icon-toggle" title="Ayarlar">⚙️</button>
+    <button id="qr-toggle" class="icon-toggle" title="Telefon Bağla">📱</button>
+  </header>
+
+  <div id="qr-popover" hidden>
+    <h3>Telefon Bağla</h3>
+    <img id="qr" width="200" height="200" alt="Deck bağlantı QR kodu" />
+    <p class="hint">Telefon kamerasıyla okut, deck otomatik açılır.</p>
+  </div>
+
+  <div id="bridge-popover" hidden>
+    <h3><span id="bridge-status-dot" class="status-dot"></span> Discord Bridge</h3>
+    <p id="bridge-status">…</p>
+    <p class="hint">BetterDiscord plugin ayarlarına bu token'ı yapıştır:</p>
+    <code id="bridge-token-display">…</code>
+  </div>
+
+  <div id="history-popover" hidden>
+    <h3>Geçmiş</h3>
+    <div class="history-undo-row">
+      <button id="undo-btn" type="button" disabled>↩️ Geri Al</button>
+      <button id="redo-btn" type="button" disabled>↪️ İleri Al</button>
+    </div>
+    <p class="hint">Ctrl+Z / Ctrl+Shift+Z ile de çalışır. Bu geçmiş sayfa yenilenince sıfırlanır.</p>
+
+    <div class="settings-divider"></div>
+
+    <p class="settings-label">Kaydedilmiş Sürümler</p>
+    <div id="backup-list"></div>
+  </div>
+
+  <div id="settings-popover" hidden>
+    <h3>Ayarlar</h3>
+    <label id="autostart-row" class="settings-toggle-row">
+      <input id="autostart-checkbox" type="checkbox" />
+      Windows açılışında otomatik başlat
+    </label>
+    <p id="autostart-note" class="hint"></p>
+
+    <div class="settings-divider"></div>
+
+    <p class="settings-label">Telefon ekranı grid boyutu</p>
+    <div class="grid-size-row">
+      <input id="grid-columns-input" type="number" min="1" max="10" />
+      <span>×</span>
+      <input id="grid-rows-input" type="number" min="1" max="10" />
+    </div>
+  </div>
+
+  <main id="workspace">
+    <section id="grid-panel">
+      <div id="button-grid"></div>
+    </section>
+    <aside id="library-panel">
+      <h2>Aksiyonlar</h2>
+      <input id="library-search" type="text" placeholder="Aksiyon ara…" />
+      <p class="hint">Grid'e sürükle bırak</p>
+      <div id="action-library"></div>
+    </aside>
+  </main>
+
+  <section id="inspector" hidden></section>
+
   <script src="app.js"></script>
 </body>
 </html>

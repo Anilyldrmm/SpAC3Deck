@@ -4,9 +4,27 @@ Gercek GUI acilmadan test edilebilmesi icin AppLifecycle'a sahte bir webview
 modulu enjekte ediliyor.
 """
 
+import uuid
 from types import SimpleNamespace
 
-from macrodeck.main import AppLifecycle
+import win32api
+
+from macrodeck.main import AppLifecycle, acquire_single_instance_lock
+
+
+def test_acquire_single_instance_lock_detects_existing_mutex():
+    # gercek uygulama kilidiyle çakışmamak icin teste ozel benzersiz isim
+    test_mutex_name = f"Global\\MacroDeck_test_{uuid.uuid4().hex}"
+    mutex1, already_running1 = acquire_single_instance_lock(test_mutex_name)
+    try:
+        assert already_running1 is False
+        mutex2, already_running2 = acquire_single_instance_lock(test_mutex_name)
+        try:
+            assert already_running2 is True
+        finally:
+            win32api.CloseHandle(mutex2)
+    finally:
+        win32api.CloseHandle(mutex1)
 
 
 class _FakeEvent:

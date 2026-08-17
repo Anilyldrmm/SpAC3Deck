@@ -21,6 +21,8 @@ class Page(BaseModel):
 
 class DeckConfig(BaseModel):
     pages: list[Page] = Field(default_factory=list)
+    grid_columns: int = 5
+    grid_rows: int = 3
 
 
 def load_config(path: Path) -> DeckConfig:
