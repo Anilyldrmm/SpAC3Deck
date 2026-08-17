@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+config/deck.json
+config/bridge_token.txt
+config/pin.txt
+config/icon_cache/
+config/sounds/
+config/backups/
+build/
+dist/
+MacroDeck-win64.zip
+SHA256SUMS.txt
+docs/

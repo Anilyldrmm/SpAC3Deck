@@ -1,0 +1,200 @@
+/* web/deck/style.css */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none; /* iOS'ta uzun basinca Paylas/Kopyala menusu cikmasin */
+  user-select: none; /* butonlar/etiketler yanlislikla secilmesin */
+}
+#pin-input { user-select: text; } /* PIN'i kopyalayabilmek icin normal kalsin */
+[hidden] { display: none !important; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #111;
+  color: #eee;
+  overscroll-behavior: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* --- PIN gate --- */
+#pin-gate { display: flex; justify-content: center; align-items: center; height: 100vh; padding: 16px; }
+.pin-card {
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+  text-align: center;
+}
+.pin-card h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: 0.02em; }
+#pin-input {
+  font-size: 28px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  padding: 12px 0;
+  border-radius: 12px;
+  border: 1px solid #333;
+  background: #1c1c1c;
+  color: #eee;
+}
+#pin-input:focus { outline: none; border-color: #4caf50; }
+#pin-submit {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: #4caf50;
+  color: #111;
+}
+#pin-submit:active { background: #3d9440; }
+.error-text { margin: 0; color: #ff6b6b; font-size: 13px; }
+
+/* --- Deck view --- */
+#deck { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* baglanti koptugunda gorunur, normalde tamamen gizli */
+#conn-banner {
+  background: #4a1f1f;
+  color: #ffb3b3;
+  font-size: 12px;
+  text-align: center;
+  padding: 6px 12px;
+  flex: none;
+}
+
+/* tek sayfa varsa JS bunu hidden yapar, alan kazanilir */
+#page-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 6px 10px 0; flex: none; }
+#page-tabs[hidden] { display: none; }
+#page-tabs button {
+  flex: none;
+  padding: 6px 14px;
+  background: #1c1c1c;
+  border: none;
+  border-radius: 999px;
+  color: #999;
+  font-size: 13px;
+}
+#page-tabs button.active { color: #111; background: #4caf50; font-weight: 600; }
+
+/* StreamDeck-tarzi izgara, boyutu configurator'dan ayarlanabilir.
+   grid-template-columns/rows burada sadece JS calismadan onceki ilk aninin
+   fallback'i (1fr) - asil deger JS'te (resizeGridToSquareCells) butonlarin
+   HER ZAMAN kare (1:1) kalmasi icin px cinsinden hesaplanip inline set edilir.
+   justify/align-content: kare hucreler konteyneri tam doldurmayabilir, artan
+   bosluk ortalanir. Ekran hep yatay gosterildigi icin tek duzen yeterli. */
+#button-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols, 5), 1fr);
+  grid-template-rows: repeat(var(--grid-rows, 3), 1fr);
+  justify-content: center;
+  align-content: center;
+  gap: 8px;
+  padding: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Telefon donme kilidi acik olsa bile deck (buton) ekranini gorsel olarak
+   yataya cevirir. PIN girme ekrani (#pin-gate) kasitli olarak buna dahil
+   degil - dik kalmasi gerekiyor, telefon zaten dik tutulurken doldurulur.
+   Viewport gercekte dikey kalir, sadece render CSS transform ile dondurulur.
+   position:absolute + top:100% mobilde pozisyon baglamina bagimli kalip
+   elementi viewport disina itebiliyor ("kayboluyor") - onun yerine tek
+   transform icinde rotate+translate kombinasyonu kullaniliyor, position'a
+   hic ihtiyac yok, bu yuzden daha guvenilir. */
+@media screen and (orientation: portrait) {
+  #deck {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vh;
+    height: 100vw;
+    overflow: hidden;
+    transform-origin: left top;
+    transform: rotate(90deg) translateY(-100%);
+    box-sizing: border-box;
+    /* #deck fixed oldugu icin body'nin safe-area padding'ini miras almiyor.
+       env(safe-area-inset-*) rotate edilmis context'te guvenilir sonuc
+       vermeyebiliyor (bazi cihaz/tarayici kombinasyonlarinda 0 donuyor) -
+       bu yuzden env()'e ek olarak cihazdan bagimsiz, notch/Dynamic Island/
+       kamera ve home-indicator'i her zaman guvenle atlayacak sabit bir
+       minimum bosluk (40px) garanti ediliyor. Boylece icerik hep ekranin
+       "guvenli ortasinda" kalir, hangi kenarin kameraya denk geldigi onemli
+       olmaz. */
+    padding-top: max(env(safe-area-inset-left), 40px);
+    padding-right: max(env(safe-area-inset-top), 40px);
+    padding-bottom: max(env(safe-area-inset-right), 40px);
+    padding-left: max(env(safe-area-inset-bottom), 40px);
+  }
+}
+
+.deck-button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  background: #1e1e1e;
+  border: none;
+  border-radius: 14px;
+  color: #eee;
+  transition: transform 80ms ease, background 80ms ease;
+}
+.deck-button.pressed { transform: scale(0.94); background: #2a2a2a; }
+.deck-button.active { background: #4caf50; color: #111; }
+.deck-button:disabled { opacity: 0.35; }
+.deck-button .icon {
+  font-size: 28px;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: none;
+}
+.deck-button .icon img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; display: block; }
+.deck-button .label { font-size: 11px; margin-top: 4px; text-align: center; padding: 0 4px; }
+
+/* ozel gorsel/Steam kapagi: gorsel butonun tamamini kaplar, etiket alta overlay olur */
+.deck-button.has-image { padding: 0; overflow: hidden; }
+.deck-button.has-image .icon { position: absolute; inset: 0; width: 100%; height: 100%; }
+.deck-button.has-image .icon img { border-radius: 14px; }
+.deck-button.has-image .label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 3px 5px 4px;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  border-radius: 0 0 14px 14px;
+}
+.gain-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 85%;
+  max-width: 100%;
+  margin-top: 6px;
+  min-width: 0;
+}
+.deck-button input[type="range"] { flex: 1; width: auto; min-width: 0; }
+.gain-reset-btn {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  border-radius: 50%;
+  background: #2a2a2a;
+  color: #aaa;
+  font-size: 13px;
+}
+.gain-reset-btn:active { background: #3a3a3a; color: #fff; }
