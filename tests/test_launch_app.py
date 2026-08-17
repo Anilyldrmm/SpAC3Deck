@@ -15,3 +15,29 @@ def test_launch_app_forwards_path():
     )
     dispatch("launch_app", {"path": "C:/Games/game.exe"}, context, "press")
     assert calls == ["C:/Games/game.exe"]
+
+
+def make_context(open_url):
+    return ActionContext(
+        send_hotkey=lambda keys: None,
+        hold_key=lambda keys: None,
+        release_key=lambda keys: None,
+        launch_uri=lambda uri: None,
+        voicemeeter=None,
+        screenshare=None,
+        open_url=open_url,
+    )
+
+
+def test_open_url_forwards_url_and_browser():
+    calls = []
+    context = make_context(lambda url, browser: calls.append((url, browser)))
+    dispatch("open_url", {"url": "https://example.com", "browser": "chrome"}, context, "press")
+    assert calls == [("https://example.com", "chrome")]
+
+
+def test_open_url_defaults_browser_when_missing():
+    calls = []
+    context = make_context(lambda url, browser: calls.append((url, browser)))
+    dispatch("open_url", {"url": "https://example.com"}, context, "press")
+    assert calls == [("https://example.com", "default")]

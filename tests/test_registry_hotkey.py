@@ -41,3 +41,17 @@ def test_hotkey_hold_press_and_release():
     dispatch("hotkey_hold", {"keys": ["v"]}, context, "release")
     assert recorder["hold_key"] == [["v"]]
     assert recorder["release_key"] == [["v"]]
+
+
+def test_hotkey_with_empty_keys_does_not_raise():
+    context, recorder = make_context()
+    dispatch("hotkey", {"keys": []}, context, "press")
+    assert recorder["send_hotkey"] == []
+
+
+def test_hotkey_hold_with_empty_keys_does_not_raise():
+    context, recorder = make_context()
+    dispatch("hotkey_hold", {"keys": []}, context, "press")
+    dispatch("hotkey_hold", {"keys": []}, context, "release")
+    assert recorder["hold_key"] == []
+    assert recorder["release_key"] == []

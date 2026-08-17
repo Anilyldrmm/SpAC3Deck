@@ -4,6 +4,8 @@ import voicemeeterlib
 
 from .voicemeeter_client import VoicemeeterBackend
 
+_BANANA_BUS_NAMES = ["A1", "A2", "A3", "B1", "B2"]
+
 _BUS_ATTR = {
     "A1": "A1",
     "A2": "A2",
@@ -39,3 +41,31 @@ class RealVoicemeeterBackend:
 
     def logout(self) -> None:
         self._vm.logout()
+
+    def list_strips(self) -> list[dict]:
+        return [
+            {"index": i, "label": self._vm.strip[i].label or f"Strip {i}"}
+            for i in range(self._vm.kind.num_strip)
+        ]
+
+    def set_bus_mute(self, bus_index: int, muted: bool) -> None:
+        self._vm.bus[bus_index].mute = muted
+
+    def get_bus_mute(self, bus_index: int) -> bool:
+        return bool(self._vm.bus[bus_index].mute)
+
+    def set_bus_gain(self, bus_index: int, value: float) -> None:
+        self._vm.bus[bus_index].gain = value
+
+    def get_bus_gain(self, bus_index: int) -> float:
+        return float(self._vm.bus[bus_index].gain)
+
+    def list_buses(self) -> list[dict]:
+        return [
+            {
+                "index": i,
+                "label": self._vm.bus[i].label
+                or (_BANANA_BUS_NAMES[i] if i < len(_BANANA_BUS_NAMES) else f"Bus {i}"),
+            }
+            for i in range(self._vm.kind.num_bus)
+        ]

@@ -12,3 +12,5 @@ class ActionContext:
     launch_uri: Callable[[str], None]
     voicemeeter: Any
     screenshare: Any
+    play_sound: Callable[[str], None] = lambda filename: None
+    open_url: Callable[[str, str], None] = lambda url, browser: None

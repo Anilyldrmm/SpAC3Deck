@@ -3,14 +3,61 @@
     {
       "name": "Genel",
       "buttons": [
-        {"id": "discord-mute", "label": "Mute", "icon": "🎙️", "action": "hotkey", "params": {"keys": ["ctrl", "shift", "m"]}},
-        {"id": "discord-deafen", "label": "Deafen", "icon": "🔇", "action": "hotkey", "params": {"keys": ["ctrl", "shift", "d"]}},
-        {"id": "discord-share1", "label": "Ekran 1 Paylaş", "icon": "🖥️", "action": "discord_screenshare", "params": {"monitor_index": 0}},
-        {"id": "vm-strip0-mute", "label": "Mic Mute", "icon": "🎚️", "action": "voicemeeter_mute", "params": {"strip_index": 0}},
-        {"id": "vm-strip0-gain", "label": "Mic Gain", "icon": "🔊", "action": "voicemeeter_gain", "params": {"strip_index": 0}},
-        {"id": "vm-strip0-a1", "label": "→A1", "icon": "🔀", "action": "voicemeeter_route", "params": {"strip_index": 0, "bus": "A1"}},
-        {"id": "vm-strip0-b1", "label": "→B1", "icon": "🔀", "action": "voicemeeter_route", "params": {"strip_index": 0, "bus": "B1"}}
+        {
+          "id": "btn-1786957960628",
+          "label": "Ekran Paylaş",
+          "icon": "https://api.iconify.design/lucide/screen-share.svg?color=%23d6d6da",
+          "action": "discord_screenshare",
+          "params": {
+            "monitor_index": 1
+          }
+        },
+        {
+          "id": "btn-1786957973859",
+          "label": "Ses Kanalına Katıl",
+          "icon": "https://api.iconify.design/lucide/log-in.svg?color=%23d6d6da",
+          "action": "discord_join_channel",
+          "params": {
+            "guild_id": "672860648022999040",
+            "channel_id": "672874041262080010"
+          }
+        },
+        {
+          "id": "btn-1786958018709",
+          "label": "Yayın Sesi",
+          "icon": "https://api.iconify.design/lucide/speaker.svg?color=%23d6d6da",
+          "action": "discord_stream_sound",
+          "params": {}
+        },
+        {
+          "id": "btn-1786958070548",
+          "label": "Bağlantıyı Kes",
+          "icon": "https://api.iconify.design/lucide/log-out.svg?color=%23d6d6da",
+          "action": "discord_leave_channel",
+          "params": {}
+        },
+        {
+          "id": "btn-1786958275249",
+          "label": "Kamera Aç/Kapat",
+          "icon": "https://api.iconify.design/lucide/video-off.svg?color=%23d6d6da",
+          "action": "discord_camera_toggle",
+          "params": {}
+        },
+        {
+          "id": "btn-1786959012326",
+          "label": "Ses Yönlendirme",
+          "icon": "https://api.iconify.design/lucide/shuffle.svg?color=%23d6d6da",
+          "action": "voicemeeter_route",
+          "params": {
+            "strip_index": 1,
+            "bus": "B2"
+          }
+        }
       ]
+    },
+    {
+      "name": "Sayfa 2",
+      "buttons": []
     }
   ]
 }

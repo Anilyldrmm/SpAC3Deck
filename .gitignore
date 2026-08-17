@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+config/bridge_token.txt
+config/pin.txt
+config/icon_cache/
+config/sounds/
+config/backups/
+build/
+dist/

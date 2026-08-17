@@ -1,8 +1,22 @@
-from macrodeck.state import compute_diff, generate_pin
+from macrodeck.state import compute_diff, generate_pin, load_or_create_pin
 
 
 def test_generate_pin_is_four_digits():
     pin = generate_pin()
+    assert len(pin) == 4
+    assert pin.isdigit()
+
+
+def test_load_or_create_pin_persists_across_calls(tmp_path):
+    path = tmp_path / "pin.txt"
+    first = load_or_create_pin(path)
+    second = load_or_create_pin(path)
+    assert first == second
+    assert path.read_text(encoding="utf-8").strip() == first
+
+
+def test_load_or_create_pin_creates_valid_pin(tmp_path):
+    pin = load_or_create_pin(tmp_path / "pin.txt")
     assert len(pin) == 4
     assert pin.isdigit()
 

@@ -10,7 +10,14 @@ from PIL import Image, ImageDraw
 def _make_icon_image():
     image = Image.new("RGB", (64, 64), "black")
     draw = ImageDraw.Draw(image)
-    draw.rectangle((16, 16, 48, 48), fill="white")
+    # basit "S" harfi: ust, orta, alt yatay cubuklari birbirine baglayan
+    # kivrimli zigzag - tek dikdortgen tek cubuk gibi gorunup "I" ile
+    # karisiyordu (kullanici raporu), bu S'nin karakteristik siluetini korur.
+    draw.rectangle((14, 12, 50, 22), fill="white")   # ust yatay
+    draw.rectangle((14, 12, 24, 32), fill="white")   # sol-ust dikey bacak
+    draw.rectangle((14, 27, 50, 37), fill="white")   # orta yatay
+    draw.rectangle((40, 32, 50, 52), fill="white")   # sag-alt dikey bacak
+    draw.rectangle((14, 42, 50, 52), fill="white")   # alt yatay
     return image
 
 

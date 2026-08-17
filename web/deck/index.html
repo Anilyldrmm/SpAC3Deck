@@ -2,17 +2,31 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>MacroDeck</title>
   <link rel="manifest" href="manifest.json" />
+
+  <!-- iOS: ana ekrana eklenince Safari cercevesi olmadan, tam ekran "app" gibi acilsin -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MacroDeck" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="theme-color" content="#111111" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="pin-gate">
-    <input id="pin-input" type="text" inputmode="numeric" placeholder="PIN" maxlength="4" />
-    <button id="pin-submit">Bağlan</button>
+    <div class="pin-card">
+      <h1>MacroDeck</h1>
+      <input id="pin-input" type="text" inputmode="numeric" placeholder="PIN" maxlength="4" autocomplete="off" />
+      <button id="pin-submit">Bağlan</button>
+      <p id="pin-error" class="error-text" hidden></p>
+    </div>
   </div>
+
   <div id="deck" hidden>
+    <div id="conn-banner" hidden>Bağlantı koptu, yeniden bağlanılıyor…</div>
     <nav id="page-tabs"></nav>
     <main id="button-grid"></main>
   </div>

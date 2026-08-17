@@ -9,18 +9,45 @@ from pathlib import Path
 
 import uvicorn
 import webview
+import win32api
+import win32event
+import winerror
 
+from . import updater
+from .paths import app_data_dir, is_frozen
 from .qr import generate_deck_url
 from .server import create_app, configure_runtime
+from .state import load_or_create_pin
 from .tray import start_tray
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 PORT = 8765
-CONFIG_PATH = Path("config/deck.json")
+CONFIG_PATH = app_data_dir() / "deck.json"
 CONFIGURATOR_TITLE = "MacroDeck Configurator"
 KEEPALIVE_TITLE = "MacroDeck"
 EXIT_GRACE_SECONDS = 5.0
+_SINGLE_INSTANCE_MUTEX_NAME = "Global\\MacroDeck_SingleInstance"
+
+
+def acquire_single_instance_lock(mutex_name: str = _SINGLE_INSTANCE_MUTEX_NAME):
+    """Ayni anda tek bir MacroDeck process'i calissin diye isimli mutex tutar.
+
+    Configurator penceresi kapatilsa bile process tray'de arka planda devam
+    eder (bilincli tasarim) - kullanici bunu fark etmeyip exe'yi tekrar
+    calistirirsa, eski process kapanmadan yeni bir Voicemeeter baglantisi
+    (ve bridge/port catismasi) birikmesin diye bu kilit gerekli.
+
+    `mutex_name` testlerin gercek uygulama kilidiyle çakışmadan izole
+    calisabilmesi icin parametrik (uretimde varsayilani kullanir).
+
+    Dondurur: (mutex_handle, already_running: bool). mutex_handle process
+    boyunca acik tutulmali (referans kaybolursa kilit serbest kalir).
+    """
+    mutex = win32event.CreateMutex(None, False, mutex_name)
+    already_running = win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS
+    return mutex, already_running
 
 
 def _get_lan_ip() -> str:
@@ -33,7 +60,10 @@ def _get_lan_ip() -> str:
 
 
 def _run_server(app):
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
+    # access_log=False: her HTTP/WS istegi icin log satiri basmaz (tray-resident
+    # calisirken gereksiz I/O) - bizim kendi logger'larimiz (discord bridge, hata
+    # loglari vb.) bundan etkilenmez, ayri logging.basicConfig ile yonetiliyor.
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning", access_log=False)
 
 
 class AppLifecycle:
@@ -67,6 +97,10 @@ class AppLifecycle:
     def is_quitting(self) -> bool:
         return self._quitting.is_set()
 
+    @property
+    def quitting_event(self) -> threading.Event:
+        return self._quitting
+
     def create_keepalive_window(self):
         """GUI dongusunu ayakta tutan gizli pencere (ilk/master pencere olmali)."""
         return self._webview.create_window(
@@ -89,7 +123,9 @@ class AppLifecycle:
                     logger.debug("mevcut configurator penceresi gosterilemedi: %s", exc)
                 return self._configurator_window
 
-            window = self._webview.create_window(CONFIGURATOR_TITLE, self._configurator_url)
+            window = self._webview.create_window(
+                CONFIGURATOR_TITLE, self._configurator_url, width=1180, height=740, min_size=(960, 600)
+            )
             self._configurator_window = window
             try:
                 window.events.closed += self._on_configurator_closed
@@ -152,8 +188,18 @@ class AppLifecycle:
 
 
 def main() -> None:
+    _mutex, already_running = acquire_single_instance_lock()
+    if already_running:
+        logger.warning("MacroDeck zaten calisiyor (tray'e bak), bu process kapatiliyor")
+        try:
+            win32api.MessageBox(0, "MacroDeck zaten calisiyor - tray icon'a bak.", "MacroDeck", 0x40)
+        except Exception as exc:
+            logger.debug("bilgi kutusu gosterilemedi: %s", exc)
+        return
+
     lan_ip = _get_lan_ip()
-    app = create_app(config_path=CONFIG_PATH, lan_ip=lan_ip, port=PORT)
+    pin = load_or_create_pin(app_data_dir() / "pin.txt")
+    app = create_app(config_path=CONFIG_PATH, pin=pin, lan_ip=lan_ip, port=PORT)
     configure_runtime(app, voicemeeter_kind="banana")
 
     server_thread = threading.Thread(target=_run_server, args=(app,), daemon=True)
@@ -163,9 +209,21 @@ def main() -> None:
     configurator_url = f"http://localhost:{PORT}/configure?token={app.state.pin}"
     print(f"Deck URL: {deck_url}")
     print(f"Configurator URL: {configurator_url}")
+    print(f"Discord bridge token (BetterDiscord plugin ayarlarina yapistir): {app.state.bridge_token}")
 
     lifecycle = AppLifecycle(app, configurator_url)
     start_tray(lifecycle.open_configurator, lifecycle.quit)
+
+    if is_frozen():
+        # gelistirme modunda self-update anlamsiz (kalici bir exe yolu yok) - sadece
+        # paketlenmis exe'de calisir. Sessiz/otomatik: yeni surum bulununca indirilir,
+        # dogrulanir ve lifecycle.quit() tetiklenir; process kapanınca bat dosyalari
+        # degistirip yeniden baslatir.
+        threading.Thread(
+            target=updater.run_update_loop,
+            args=(lifecycle.quitting_event, lifecycle.quit),
+            daemon=True,
+        ).start()
 
     lifecycle.create_keepalive_window()
     lifecycle.open_configurator()

@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 from macrodeck.config import Button, Page, DeckConfig, save_config
-from macrodeck.server import create_app, compute_strip_indices
+from macrodeck.server import create_app, compute_strip_indices, compute_bus_indices
 
 
 def build_client(tmp_path, pin="1234", lan_ip=None, port=8765):
@@ -160,3 +160,47 @@ def test_compute_strip_indices_dedupes_and_sorts():
         ]),
     ])
     assert compute_strip_indices(config) == [0, 1, 4]
+
+
+def test_compute_bus_indices_dedupes_and_sorts():
+    config = DeckConfig(pages=[
+        Page(name="A", buttons=[
+            Button(id="1", label="a", action="voicemeeter_bus_mute", params={"bus_index": 2}),
+            Button(id="2", label="b", action="voicemeeter_bus_gain", params={"bus_index": 0}),
+            Button(id="3", label="c", action="voicemeeter_mute", params={"strip_index": 5}),
+        ]),
+    ])
+    assert compute_bus_indices(config) == [0, 2]
+
+
+def test_get_sounds_empty_when_no_uploads(tmp_path):
+    client = build_client(tmp_path)
+    response = client.get("/api/sources/sounds", params={"token": "1234"})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_upload_sound_rejects_non_wav(tmp_path):
+    client = build_client(tmp_path)
+    response = client.post(
+        "/api/sound/upload",
+        params={"token": "1234"},
+        files={"file": ("test.mp3", b"fake", "audio/mpeg")},
+    )
+    assert response.status_code == 415
+
+
+def test_upload_and_list_sound(tmp_path):
+    client = build_client(tmp_path)
+    upload = client.post(
+        "/api/sound/upload",
+        params={"token": "1234"},
+        files={"file": ("boom.wav", b"RIFF....WAVEfmt ", "audio/wav")},
+    )
+    assert upload.status_code == 200
+    assert upload.json()["file"].endswith(".wav")
+
+    listing = client.get("/api/sources/sounds", params={"token": "1234"})
+    assert listing.status_code == 200
+    assert len(listing.json()) == 1
+    assert listing.json()[0]["file"] == upload.json()["file"]
