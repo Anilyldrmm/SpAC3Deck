@@ -2,33 +2,48 @@
 
 Telefondan LAN üzerinden PC kontrolü: Discord, Voicemeeter, Steam ve genel hotkey/uygulama başlatma.
 
-## Kurulum
+## Kurulum (kullanıcılar için)
+
+1. [Releases](https://github.com/Anilyldrmm/SpAC3Deck/releases/latest) sayfasından **MacroDeckSetup.exe** dosyasını indir.
+2. Çalıştır, "İleri" sihirbazını takip et — yönetici izni istemez, birkaç saniyede kurulur.
+3. Kurulum bitince açılan MacroDeck penceresinde (ya da tray'deki simgeden "Configurator Aç") gösterilen QR kodu telefonla okut, ya da Deck URL'sini aynı WiFi'daki telefonun tarayıcısında aç.
+
+Program arka planda (tray'de) çalışmaya devam eder; kapatmak için tray simgesine sağ tıklayıp "Çıkış" seç. Yeni sürümler otomatik olarak (arka planda, sessizce) indirilip uygulanır — elle bir şey yapmana gerek yok.
+
+## Geliştirme
 
 ```bash
 pip install -r requirements.txt
 python -m macrodeck.main
 ```
 
-Konsolda basılan Deck URL'sini telefonda tarayıcıyla aç (aynı WiFi ağında olmalısın) ya da configurator penceresindeki QR kodu okut.
-
-## Test
+### Test
 
 ```bash
 pytest
 ```
 
-## Config
+### Config
 
-`config/deck.json` — configurator penceresinden (tray → "Configurator Aç") ya da doğrudan dosyayı düzenleyerek değiştirilir. (Paketlenmiş `.exe` ile çalıştırılıyorsa bu dosya `%APPDATA%\MacroDeck\deck.json` konumundadır — bkz. aşağıdaki Paketleme bölümü.)
+`config/deck.json` — configurator penceresinden (tray → "Configurator Aç") ya da doğrudan dosyayı düzenleyerek değiştirilir. (Paketlenmiş `.exe` ile çalıştırılıyorsa bu dosya `%APPDATA%\MacroDeck\deck.json` konumundadır — kurulum yeri olan `%LOCALAPPDATA%\Programs\MacroDeck\`'ten farklıdır.)
 
-## Paketleme (tek exe)
+### Paketleme (installer üretme)
 
 ```bash
 pip install -r requirements.txt
 pyinstaller MacroDeck.spec
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer.iss
 ```
 
-Çıktı `dist/MacroDeck/MacroDeck.exe` — bu klasörün tamamı (exe + `_internal/`) birlikte taşınmalı/kurulmalıdır. Config, bridge token, ikon/ses cache'i `%APPDATA%\MacroDeck\` altına yazılır (Program Files gibi salt-okunur bir konuma kurulsa bile sorun çıkmaz).
+İlk komut `dist/MacroDeck/` klasörünü (exe + `_internal/`) üretir, ikincisi bunu tek bir `dist/installer/MacroDeckSetup.exe` kurulum dosyasına paketler. Yeni bir sürüm yayınlarken `macrodeck/__init__.py`'deki `__version__` ile `installer.iss`'teki `MyAppVersion`'ı birlikte güncelle. Config, bridge token, ikon/ses cache'i `%APPDATA%\MacroDeck\` altına yazılır (kurulum yerinden bağımsız, salt-okunur bir klasöre kurulsa bile sorun çıkmaz).
+
+Otomatik güncelleme (`macrodeck/updater.py`) GitHub Releases'teki `MacroDeck-win64.zip` + `SHA256SUMS.txt` asset'lerini kullanır — bunlar installer'dan ayrı bir mekanizma, her release'e ikisi de eklenmeli:
+
+```bash
+cd dist/MacroDeck && powershell Compress-Archive -Path * -DestinationPath ../../MacroDeck-win64.zip
+cd ../.. && sha256sum MacroDeck-win64.zip  # -> SHA256SUMS.txt ("<hash>  MacroDeck-win64.zip")
+gh release create vX.Y.Z MacroDeck-win64.zip SHA256SUMS.txt dist/installer/MacroDeckSetup.exe
+```
 
 ## End-to-End Manual Test Checklist
 
