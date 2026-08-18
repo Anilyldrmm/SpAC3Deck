@@ -193,9 +193,17 @@ def build_apply_script(staging: Path, target: Path, exe_name: str, pid: int) -> 
 
 
 def launch_apply_script(script_path: Path) -> None:
+    """CREATE_NO_WINDOW + DETACHED_PROCESS birlikte kullanilmaz: DETACHED_PROCESS
+    cmd.exe'ye HICBIR console vermiyor, CREATE_NO_WINDOW ise gizli bir console
+    istiyor - bu celiskili kombinasyon script'in icindeki tasklist/timeout/robocopy
+    gibi console alt-komutlarinin duzgun calismasini engelleyip bat'i yarim
+    birakiyordu (exe hic degismeden, script silinmeden askida kaliyordu - "surekli
+    kendi kendini yeniden baslatma" bug'inin sebebi buydu). Sadece CREATE_NO_WINDOW
+    yeterli: gorunmez ama gecerli bir console verir, cmd.exe process'ten bagimsiz
+    yasamaya devam eder (parent zaten birazdan kapanacak)."""
     subprocess.Popen(
         ["cmd.exe", "/c", str(script_path)],
-        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+        creationflags=subprocess.CREATE_NO_WINDOW,
         close_fds=True,
     )
 
