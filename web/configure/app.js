@@ -1264,6 +1264,12 @@ document.addEventListener("click", (event) => {
 });
 
 document.getElementById("pin-display").textContent = `PIN: ${TOKEN}`;
+fetch(`/api/version?token=${encodeURIComponent(TOKEN)}`)
+  .then((response) => (response.ok ? response.json() : null))
+  .then((data) => {
+    if (data) document.getElementById("app-version").textContent = `v${data.version}`;
+  })
+  .catch(() => {});
 document.getElementById("library-search").addEventListener("input", (event) => {
   renderLibrary(event.target.value);
 });

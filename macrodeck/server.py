@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
+from . import __version__ as APP_VERSION
 from . import autostart
 from . import backups as backups_module
 from .config import DeckConfig, load_config, save_config
@@ -169,6 +170,11 @@ def create_app(
             media_type="image/png",
             headers={"Cache-Control": "no-store"},
         )
+
+    @app.get("/api/version")
+    def get_version(request: Request, token: str | None = None):
+        _require_auth(request, token)
+        return {"version": APP_VERSION}
 
     @app.get("/api/settings/autostart")
     def get_autostart(request: Request, token: str | None = None):
