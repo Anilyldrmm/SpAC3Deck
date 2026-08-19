@@ -21,18 +21,24 @@ def _make_icon_image():
     return image
 
 
-def start_tray(on_open_configurator, on_quit) -> pystray.Icon:
+def start_tray(on_open_configurator, on_quit, on_check_updates) -> pystray.Icon:
     """Tray icon'u kendi thread'inde baslatir ve icon nesnesini doner.
 
     `on_open_configurator` sadece pencere olusturmali; GUI dongusu (webview.start)
     main thread'de bir kez calisir. `on_quit(icon)` tum kapatma islerinden sorumlu.
+    `on_check_updates()` manuel guncelleme kontrolunu tetikler.
+
+    "Configurator Aç" `default=True` ile isaretli: pystray'in Windows backend'i
+    tray ikonuna sol tiklandiginda (sag tikla acilan menu degil) varsayilan
+    ogeyi calistirir - boylece ikona tiklamak da Configurator'u acar.
     """
     icon = pystray.Icon(
         "macrodeck",
         _make_icon_image(),
         "MacroDeck",
         menu=pystray.Menu(
-            pystray.MenuItem("Configurator Aç", lambda: on_open_configurator()),
+            pystray.MenuItem("Configurator Aç", lambda: on_open_configurator(), default=True),
+            pystray.MenuItem("Güncellemeleri Kontrol Et", lambda: on_check_updates()),
             pystray.MenuItem("Çıkış", lambda: on_quit(icon)),
         ),
     )

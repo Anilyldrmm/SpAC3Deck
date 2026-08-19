@@ -5,6 +5,8 @@ import logging
 import os
 import socket
 import threading
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import uvicorn
@@ -48,6 +50,17 @@ def acquire_single_instance_lock(mutex_name: str = _SINGLE_INSTANCE_MUTEX_NAME):
     mutex = win32event.CreateMutex(None, False, mutex_name)
     already_running = win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS
     return mutex, already_running
+
+
+def _activate_running_instance(pin: str) -> None:
+    """Zaten calisan process'e '/api/activate' ile pencereni on plana getir
+    sinyali gonderir - kisayoldan/exe'den ikinci kez acilinca Discord gibi
+    davranmasi icin (uyari kutusu yok, sessizce mevcut pencereyi gosterir)."""
+    url = f"http://127.0.0.1:{PORT}/api/activate?token={pin}"
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, method="POST"), timeout=3)
+    except (urllib.error.URLError, OSError) as exc:
+        logger.warning("calisan MacroDeck'e activate sinyali gonderilemedi: %s", exc)
 
 
 def _get_lan_ip() -> str:
@@ -186,15 +199,42 @@ class AppLifecycle:
     def wait_for_quit(self):
         self._quitting.wait()
 
+    def check_for_updates(self, icon=None, *_):
+        """Tray "Güncellemeleri Kontrol Et": arka plan thread'inde calisir,
+        sonucu bir MessageBox ile bildirir (guncelleme bulunup uygulanirsa
+        quit tetiklenir, mesaj gostermeye gerek kalmaz - process kapanacak)."""
+        def _worker():
+            if not is_frozen():
+                self._notify("Gelistirme modunda güncelleme kontrolü yapılmaz.")
+                return
+            info = updater.check_for_update()
+            if info is None:
+                self._notify("Zaten en güncel sürümdesiniz.")
+                return
+            if updater.apply_update(info):
+                self.quit(icon)
+            else:
+                self._notify("Güncelleme indirilemedi, daha sonra tekrar deneyin.")
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    @staticmethod
+    def _notify(message: str) -> None:
+        try:
+            win32api.MessageBox(0, message, "MacroDeck", 0x40)
+        except Exception as exc:
+            logger.debug("bilgi kutusu gosterilemedi: %s", exc)
+
 
 def main() -> None:
     _mutex, already_running = acquire_single_instance_lock()
     if already_running:
-        logger.warning("MacroDeck zaten calisiyor (tray'e bak), bu process kapatiliyor")
-        try:
-            win32api.MessageBox(0, "MacroDeck zaten calisiyor - tray icon'a bak.", "MacroDeck", 0x40)
-        except Exception as exc:
-            logger.debug("bilgi kutusu gosterilemedi: %s", exc)
+        # Discord tarzi: uyari kutusu yok, mevcut process'e pencereyi on plana
+        # getirmesini soyleyip sessizce cikilir - kisayola tekrar tiklamak da
+        # tray ikonuna tiklamak gibi calissin diye.
+        logger.info("MacroDeck zaten calisiyor, mevcut pencere on plana getiriliyor")
+        pin = load_or_create_pin(app_data_dir() / "pin.txt")
+        _activate_running_instance(pin)
         return
 
     lan_ip = _get_lan_ip()
@@ -212,7 +252,8 @@ def main() -> None:
     print(f"Discord bridge token (BetterDiscord plugin ayarlarina yapistir): {app.state.bridge_token}")
 
     lifecycle = AppLifecycle(app, configurator_url)
-    start_tray(lifecycle.open_configurator, lifecycle.quit)
+    app.state.activate_callback = lifecycle.open_configurator
+    start_tray(lifecycle.open_configurator, lifecycle.quit, lifecycle.check_for_updates)
 
     if is_frozen():
         # gelistirme modunda self-update anlamsiz (kalici bir exe yolu yok) - sadece

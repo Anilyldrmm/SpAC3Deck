@@ -149,6 +149,25 @@ def test_qr_endpoint_returns_png_for_lan_url(tmp_path):
     assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_activate_endpoint_requires_pin_and_calls_callback(tmp_path):
+    client = build_client(tmp_path)
+    calls = []
+    client.app.state.activate_callback = lambda: calls.append(1)
+
+    assert client.post("/api/activate").status_code == 403
+    assert calls == []
+
+    response = client.post("/api/activate", params={"token": "1234"})
+    assert response.status_code == 200
+    assert calls == [1]
+
+
+def test_activate_endpoint_without_callback_still_ok(tmp_path):
+    client = build_client(tmp_path)
+    response = client.post("/api/activate", params={"token": "1234"})
+    assert response.status_code == 200
+
+
 def test_compute_strip_indices_dedupes_and_sorts():
     config = DeckConfig(pages=[
         Page(name="A", buttons=[
