@@ -9,11 +9,31 @@ from .config import DeckConfig
 
 logger = logging.getLogger(__name__)
 
-_HOTKEYS = {
-    "volume up": "_on_volume_up",
-    "volume down": "_on_volume_down",
-    "volume mute": "_on_mute",
+_DEFAULT_KEYS = {
+    "up": "volume up",
+    "down": "volume down",
+    "mute": "volume mute",
 }
+_HANDLER_NAMES = {
+    "up": "_on_volume_up",
+    "down": "_on_volume_down",
+    "mute": "_on_mute",
+}
+
+
+def _resolve_bindings(media_keys) -> dict[str, str]:
+    """Her aksiyon icin kullanilacak hotkey string'ini dondurur: config'de
+    ozel tus kombinasyonu (up_keys/down_keys/mute_keys) tanimliysa onu,
+    yoksa varsayilan "volume up/down/mute" medya tusunu kullanir."""
+    overrides = {
+        "up": media_keys.up_keys,
+        "down": media_keys.down_keys,
+        "mute": media_keys.mute_keys,
+    }
+    return {
+        action: "+".join(keys) if keys else _DEFAULT_KEYS[action]
+        for action, keys in overrides.items()
+    }
 
 
 class MediaKeyListener:
@@ -40,11 +60,14 @@ class MediaKeyListener:
         # tuslarini devre disi birakir, bunu sadece kullanici ozellikle
         # actiginda yapmaliyiz - yoksa varsayilan kurulumda herkesin
         # donanim ses tuslari sessizce calismaz olur.
-        if not self._get_config().media_keys.enabled:
+        media_keys = self._get_config().media_keys
+        if not media_keys.enabled:
             return
+        bindings = _resolve_bindings(media_keys)
         try:
-            for key, handler_name in _HOTKEYS.items():
-                hook = self._keyboard.add_hotkey(key, getattr(self, handler_name), suppress=True)
+            for action, key in bindings.items():
+                handler = getattr(self, _HANDLER_NAMES[action])
+                hook = self._keyboard.add_hotkey(key, handler, suppress=True)
                 self._hooks.append(hook)
         except Exception as exc:
             logger.warning("medya tusu dinleyicisi baslatilamadi: %s", exc)

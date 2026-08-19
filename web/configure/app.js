@@ -1218,10 +1218,16 @@ function renderMediaKeysSettings() {
     target_type: "strip",
     target_index: 0,
     step_db: 3.0,
+    up_keys: [],
+    down_keys: [],
+    mute_keys: [],
   });
 
   document.getElementById("media-keys-enabled-checkbox").checked = mediaKeys.enabled;
   document.getElementById("media-keys-step-input").value = mediaKeys.step_db;
+  renderMediaKeysCaptureButton("media-keys-up-capture", mediaKeys.up_keys, "Volume Up (varsayılan)");
+  renderMediaKeysCaptureButton("media-keys-down-capture", mediaKeys.down_keys, "Volume Down (varsayılan)");
+  renderMediaKeysCaptureButton("media-keys-mute-capture", mediaKeys.mute_keys, "Volume Mute (varsayılan)");
 
   const typeSelect = document.getElementById("media-keys-target-type");
   typeSelect.innerHTML = "";
@@ -1251,6 +1257,55 @@ function renderMediaKeysTargetIndexOptions() {
     opt.textContent = channel.label;
     opt.selected = channel.index === mediaKeys.target_index;
     indexSelect.appendChild(opt);
+  });
+}
+
+function renderMediaKeysCaptureButton(buttonId, keys, placeholder) {
+  const btn = document.getElementById(buttonId);
+  if (!btn.dataset.wired) {
+    wireMediaKeysCaptureButton(btn);
+    btn.dataset.wired = "1";
+  }
+  btn.textContent = keys && keys.length ? keys.join("+") : placeholder;
+}
+
+function wireMediaKeysCaptureButton(btn) {
+  const field = { "media-keys-up-capture": "up_keys", "media-keys-down-capture": "down_keys", "media-keys-mute-capture": "mute_keys" }[btn.id];
+  let listening = false;
+  let pressed = [];
+
+  function onKeyDown(event) {
+    event.preventDefault();
+    const key = MODIFIER_KEYS[event.key] || event.key.toLowerCase();
+    if (!pressed.includes(key)) pressed.push(key);
+    btn.textContent = pressed.join("+");
+  }
+
+  function onKeyUp() {
+    if (pressed.length === 0) return;
+    config.media_keys[field] = pressed;
+    stopListening();
+    scheduleSave();
+  }
+
+  function stopListening() {
+    listening = false;
+    btn.classList.remove("listening");
+    document.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("keyup", onKeyUp);
+  }
+
+  btn.addEventListener("click", () => {
+    if (listening) {
+      stopListening();
+      return;
+    }
+    listening = true;
+    pressed = [];
+    btn.classList.add("listening");
+    btn.textContent = "Tuşlara bas…";
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keyup", onKeyUp);
   });
 }
 

@@ -25,6 +25,14 @@ class MediaKeysConfig(BaseModel):
     target_type: Literal["strip", "bus"] = "strip"
     target_index: int = 0
     step_db: float = 3.0
+    # bos ise varsayilan "volume up"/"volume down"/"volume mute" kullanilir -
+    # bazi klavye/knob donanimlari bu medya tuslarini WH_KEYBOARD_LL hook'unun
+    # goremeyecegi bir kanaldan (APPCOMMAND/HID consumer-page) gonderdigi icin,
+    # knob'u duz bir tus kombinasyonuna (F13 vb.) remap edip burada override
+    # etmek gerekebiliyor.
+    up_keys: list[str] = Field(default_factory=list)
+    down_keys: list[str] = Field(default_factory=list)
+    mute_keys: list[str] = Field(default_factory=list)
 
 
 class DeckConfig(BaseModel):

@@ -162,6 +162,22 @@ def test_start_registers_volume_and_mute_hotkeys_with_suppress():
     assert all(suppress is True for _key, _cb, suppress in fake_keyboard.registered.values())
 
 
+def test_start_uses_custom_key_bindings_when_set():
+    config = DeckConfig(media_keys=MediaKeysConfig(
+        enabled=True,
+        up_keys=["ctrl", "alt", "f19"],
+        down_keys=["ctrl", "alt", "f20"],
+        mute_keys=["f13"],
+    ))
+    fake_keyboard = FakeKeyboard()
+    listener, _backend, _client = make_listener(config, keyboard_module=fake_keyboard)
+
+    listener.start()
+
+    registered_keys = {key for key, _cb, _suppress in fake_keyboard.registered.values()}
+    assert registered_keys == {"ctrl+alt+f19", "ctrl+alt+f20", "f13"}
+
+
 def test_stop_removes_all_registered_hooks():
     config = DeckConfig(media_keys=MediaKeysConfig(enabled=True))
     fake_keyboard = FakeKeyboard()
