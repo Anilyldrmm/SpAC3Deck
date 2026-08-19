@@ -388,6 +388,14 @@ body {
   cursor: pointer;
 }
 .field-row .bus-group button.active { background: #33344a; color: #fff; border-color: #6266ff; }
+#media-keys-detail .hotkey-capture {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#media-keys-detail .page-tab-remove { flex: none; }
 .hotkey-capture {
   padding: 7px 12px;
   border-radius: 7px;
