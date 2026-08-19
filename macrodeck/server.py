@@ -80,6 +80,7 @@ def create_app(
     app.state.bridge_token = load_or_create_bridge_token(
         config_path.parent / "bridge_token.txt"
     )
+    app.state.activate_callback = None  # main.py doldurur (AppLifecycle.open_configurator)
 
     def _pin_matches(token: str | None) -> bool:
         if token is None:
@@ -194,6 +195,17 @@ def create_app(
     def get_bridge_token(request: Request, token: str | None = None):
         _require_auth(request, token)
         return {"bridge_token": app.state.bridge_token, "bridge_connected": app.state.discord_bridge.connected}
+
+    @app.post("/api/activate")
+    def activate(request: Request, token: str | None = None):
+        """Ikinci bir process (kisayol/exe tekrar calistirilinca) bu process'e
+        'zaten calisiyorsun, pencereni on plana getir' der - Discord tarzi tek
+        instance davranisi. main.py'de set edilir (activate_callback)."""
+        _require_auth(request, token)
+        callback = getattr(app.state, "activate_callback", None)
+        if callback is not None:
+            callback()
+        return {"ok": True}
 
     @app.get("/api/sources/voicemeeter-strips")
     def get_voicemeeter_strips(request: Request, token: str | None = None):
