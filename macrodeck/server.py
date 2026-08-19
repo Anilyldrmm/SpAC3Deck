@@ -338,15 +338,39 @@ def create_app(
     app.state.last_voicemeeter_state = {}
     app.state.voicemeeter_client = None  # configure_runtime doldurur
     app.state.voicemeeter_backend = None
+    app.state.voicemeeter_kind = "banana"  # configure_runtime doldurur
     app.state.voicemeeter_strip_indices: list[int] = []
     app.state.voicemeeter_bus_indices: list[int] = []
 
+    RECONNECT_INTERVAL = 5.0
+    _last_reconnect_attempt = 0.0
+
+    def _try_connect_voicemeeter(app):
+        backend, client = _connect_voicemeeter(app.state.voicemeeter_kind)
+        if client is None:
+            return
+        app.state.voicemeeter_backend = backend
+        app.state.voicemeeter_client = client
+        app.state.action_context.voicemeeter = client
+        logger.info("voicemeeter'a sonradan baglanildi")
+
     async def _poll_voicemeeter():
+        nonlocal _last_reconnect_attempt
+        loop = asyncio.get_running_loop()
         while True:
             await asyncio.sleep(0.5)
             client = app.state.voicemeeter_client
+            # Voicemeeter baslangicta kapaliysa client hep None kalirdi; burada
+            # periyodik olarak yeniden baglanmayi dene (kullanici Voicemeeter'i
+            # MacroDeck'ten sonra actiginda strip/bus listesi bos kalmasin diye).
+            if client is None:
+                now = loop.time()
+                if now - _last_reconnect_attempt >= RECONNECT_INTERVAL:
+                    _last_reconnect_attempt = now
+                    _try_connect_voicemeeter(app)
+                continue
             # bagli telefon yokken COM cagrilarini atla (bos yere CPU/COM overhead)
-            if client is None or not app.state.manager.active:
+            if not app.state.manager.active:
                 continue
             new_state = {}
             for strip_index in app.state.voicemeeter_strip_indices:
@@ -439,24 +463,27 @@ def create_app(
     return app
 
 
-def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
-    from . import os_bridge
+def _connect_voicemeeter(kind: str):
+    """Voicemeeter'a baglanmayi dener; kurulu/acik degilse (None, None) doner."""
     from .voicemeeter_backend import RealVoicemeeterBackend
     from .voicemeeter_client import VoicemeeterClient
-    from .discord_screenshare import DiscordScreenShareController
 
-    # Voicemeeter kurulu/acik olmayabilir; bu durumda diger entegrasyonlar calismaya devam etmeli
-    backend = None
-    voicemeeter_client = None
     try:
-        backend = RealVoicemeeterBackend(kind=voicemeeter_kind)
-        voicemeeter_client = VoicemeeterClient(backend)
+        backend = RealVoicemeeterBackend(kind=kind)
+        return backend, VoicemeeterClient(backend)
     except Exception as exc:
         logger.warning(
             "voicemeeter baglanamadi, voicemeeter butonlari devre disi: %s", exc
         )
-        backend = None
-        voicemeeter_client = None
+        return None, None
+
+
+def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
+    from . import os_bridge
+    from .discord_screenshare import DiscordScreenShareController
+
+    # Voicemeeter kurulu/acik olmayabilir; bu durumda diger entegrasyonlar calismaya devam etmeli
+    backend, voicemeeter_client = _connect_voicemeeter(voicemeeter_kind)
 
     screenshare = DiscordScreenShareController(app.state.discord_bridge)
 
@@ -472,6 +499,7 @@ def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
     )
     app.state.voicemeeter_client = voicemeeter_client
     app.state.voicemeeter_backend = backend
+    app.state.voicemeeter_kind = voicemeeter_kind
 
     current_config = load_config(app.state.config_path)
     app.state.voicemeeter_strip_indices = compute_strip_indices(current_config)
