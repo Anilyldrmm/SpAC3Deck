@@ -1269,8 +1269,14 @@ function renderMediaKeysCaptureButton(buttonId, keys, placeholder) {
   btn.textContent = keys && keys.length ? keys.join("+") : placeholder;
 }
 
+const MEDIA_KEYS_CAPTURE_FIELDS = {
+  "media-keys-up-capture": "up_keys",
+  "media-keys-down-capture": "down_keys",
+  "media-keys-mute-capture": "mute_keys",
+};
+
 function wireMediaKeysCaptureButton(btn) {
-  const field = { "media-keys-up-capture": "up_keys", "media-keys-down-capture": "down_keys", "media-keys-mute-capture": "mute_keys" }[btn.id];
+  const field = MEDIA_KEYS_CAPTURE_FIELDS[btn.id];
   let listening = false;
   let pressed = [];
 
@@ -1308,6 +1314,15 @@ function wireMediaKeysCaptureButton(btn) {
     document.addEventListener("keyup", onKeyUp);
   });
 }
+
+["media-keys-up-clear", "media-keys-down-clear", "media-keys-mute-clear"].forEach((clearBtnId) => {
+  const captureBtnId = clearBtnId.replace("-clear", "-capture");
+  document.getElementById(clearBtnId).addEventListener("click", () => {
+    config.media_keys[MEDIA_KEYS_CAPTURE_FIELDS[captureBtnId]] = [];
+    renderMediaKeysSettings();
+    scheduleSave();
+  });
+});
 
 document.getElementById("media-keys-enabled-checkbox").addEventListener("change", (event) => {
   config.media_keys.enabled = event.target.checked;
