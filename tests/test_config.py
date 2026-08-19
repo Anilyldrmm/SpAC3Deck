@@ -23,4 +23,35 @@ def test_save_writes_valid_json(tmp_path):
     path = tmp_path / "deck.json"
     save_config(DeckConfig(pages=[]), path)
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data == {"pages": [], "grid_columns": 5, "grid_rows": 3}
+    assert data == {
+        "pages": [],
+        "grid_columns": 5,
+        "grid_rows": 3,
+        "media_keys": {
+            "enabled": False,
+            "target_type": "strip",
+            "target_index": 0,
+            "step_db": 3.0,
+        },
+    }
+
+
+def test_default_media_keys_config_is_disabled(tmp_path):
+    config = load_config(tmp_path / "deck.json")
+    assert config.media_keys.enabled is False
+    assert config.media_keys.target_type == "strip"
+    assert config.media_keys.target_index == 0
+    assert config.media_keys.step_db == 3.0
+
+
+def test_media_keys_config_roundtrip(tmp_path):
+    path = tmp_path / "deck.json"
+    config = DeckConfig(media_keys={"enabled": True, "target_type": "bus", "target_index": 1, "step_db": 1.5})
+
+    save_config(config, path)
+    loaded = load_config(path)
+
+    assert loaded.media_keys.enabled is True
+    assert loaded.media_keys.target_type == "bus"
+    assert loaded.media_keys.target_index == 1
+    assert loaded.media_keys.step_db == 1.5

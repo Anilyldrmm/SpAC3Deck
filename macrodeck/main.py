@@ -183,7 +183,12 @@ class AppLifecycle:
             self._configurator_window = None
 
     def shutdown(self):
-        """Voicemeeter oturumunu kapatir (idempotent)."""
+        """Voicemeeter oturumunu ve medya tusu dinleyicisini kapatir (idempotent)."""
+        listener = getattr(self._app.state, "media_key_listener", None)
+        if listener is not None:
+            listener.stop()
+            self._app.state.media_key_listener = None
+
         backend = getattr(self._app.state, "voicemeeter_backend", None)
         if backend is None:
             return

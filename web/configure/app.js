@@ -1204,6 +1204,77 @@ document.getElementById("settings-toggle").addEventListener("click", async () =>
 
   document.getElementById("grid-columns-input").value = config.grid_columns ?? 5;
   document.getElementById("grid-rows-input").value = config.grid_rows ?? 3;
+
+  renderMediaKeysSettings();
+});
+
+// --- medya tuşları (klavye knob/volume) ayarları ---
+
+const MEDIA_KEYS_TARGET_TYPE_LABELS = { strip: "Giriş (Strip)", bus: "Çıkış (Bus)" };
+
+function renderMediaKeysSettings() {
+  const mediaKeys = config.media_keys ?? (config.media_keys = {
+    enabled: false,
+    target_type: "strip",
+    target_index: 0,
+    step_db: 3.0,
+  });
+
+  document.getElementById("media-keys-enabled-checkbox").checked = mediaKeys.enabled;
+  document.getElementById("media-keys-step-input").value = mediaKeys.step_db;
+
+  const typeSelect = document.getElementById("media-keys-target-type");
+  typeSelect.innerHTML = "";
+  Object.entries(MEDIA_KEYS_TARGET_TYPE_LABELS).forEach(([value, label]) => {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = label;
+    opt.selected = value === mediaKeys.target_type;
+    typeSelect.appendChild(opt);
+  });
+
+  renderMediaKeysTargetIndexOptions();
+}
+
+function renderMediaKeysTargetIndexOptions() {
+  const mediaKeys = config.media_keys;
+  const indexSelect = document.getElementById("media-keys-target-index");
+  const channels = mediaKeys.target_type === "bus" ? sources.voicemeeterBuses : sources.voicemeeterStrips;
+  const options = channels.length
+    ? channels
+    : [{ index: mediaKeys.target_index ?? 0, label: `#${mediaKeys.target_index ?? 0}` }];
+
+  indexSelect.innerHTML = "";
+  options.forEach((channel) => {
+    const opt = document.createElement("option");
+    opt.value = channel.index;
+    opt.textContent = channel.label;
+    opt.selected = channel.index === mediaKeys.target_index;
+    indexSelect.appendChild(opt);
+  });
+}
+
+document.getElementById("media-keys-enabled-checkbox").addEventListener("change", (event) => {
+  config.media_keys.enabled = event.target.checked;
+  scheduleSave();
+});
+
+document.getElementById("media-keys-target-type").addEventListener("change", (event) => {
+  config.media_keys.target_type = event.target.value;
+  renderMediaKeysTargetIndexOptions();
+  config.media_keys.target_index = parseInt(document.getElementById("media-keys-target-index").value, 10) || 0;
+  scheduleSave();
+});
+
+document.getElementById("media-keys-target-index").addEventListener("change", (event) => {
+  config.media_keys.target_index = parseInt(event.target.value, 10);
+  scheduleSave();
+});
+
+document.getElementById("media-keys-step-input").addEventListener("change", (event) => {
+  const step = parseFloat(event.target.value);
+  if (Number.isFinite(step) && step > 0) config.media_keys.step_db = step;
+  scheduleSave();
 });
 
 function updateGridSize() {

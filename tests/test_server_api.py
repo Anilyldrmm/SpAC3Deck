@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 from macrodeck.config import Button, Page, DeckConfig, save_config
-from macrodeck.server import create_app, compute_strip_indices, compute_bus_indices
+from macrodeck.server import create_app, compute_strip_indices, compute_bus_indices, configure_runtime
 
 
 def build_client(tmp_path, pin="1234", lan_ip=None, port=8765):
@@ -75,6 +75,51 @@ def test_put_config_recomputes_voicemeeter_strip_indices(tmp_path):
     )
     assert response.status_code == 200
     assert app.state.voicemeeter_strip_indices == [3, 5]
+
+
+class _FakeKeyboardForMediaKeys:
+    def __init__(self):
+        self.registered = {}
+        self._next_id = 0
+
+    def add_hotkey(self, key, callback, suppress=False):
+        self._next_id += 1
+        self.registered[self._next_id] = key
+        return self._next_id
+
+    def remove_hotkey(self, hook_id):
+        del self.registered[hook_id]
+
+
+def test_put_config_toggles_media_key_listener_live(tmp_path):
+    """enabled ayari degisince restart beklemeden hook'lar kurulup kaldirilmali."""
+    client = build_client(tmp_path)
+    app = client.app
+    fake_keyboard = _FakeKeyboardForMediaKeys()
+    configure_runtime(app, media_key_keyboard_module=fake_keyboard)
+    assert fake_keyboard.registered == {}  # varsayilan enabled=False
+
+    enable_response = client.put(
+        "/api/config",
+        params={"token": "1234"},
+        json={
+            "pages": [],
+            "media_keys": {"enabled": True, "target_type": "strip", "target_index": 0, "step_db": 3.0},
+        },
+    )
+    assert enable_response.status_code == 200
+    assert set(fake_keyboard.registered.values()) == {"volume up", "volume down", "volume mute"}
+
+    disable_response = client.put(
+        "/api/config",
+        params={"token": "1234"},
+        json={
+            "pages": [],
+            "media_keys": {"enabled": False, "target_type": "strip", "target_index": 0, "step_db": 3.0},
+        },
+    )
+    assert disable_response.status_code == 200
+    assert fake_keyboard.registered == {}
 
 
 def test_rest_rate_limits_failed_pin_attempts(tmp_path):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -19,10 +20,18 @@ class Page(BaseModel):
     buttons: list[Button] = Field(default_factory=list)
 
 
+class MediaKeysConfig(BaseModel):
+    enabled: bool = False
+    target_type: Literal["strip", "bus"] = "strip"
+    target_index: int = 0
+    step_db: float = 3.0
+
+
 class DeckConfig(BaseModel):
     pages: list[Page] = Field(default_factory=list)
     grid_columns: int = 5
     grid_rows: int = 3
+    media_keys: MediaKeysConfig = Field(default_factory=MediaKeysConfig)
 
 
 def load_config(path: Path) -> DeckConfig:

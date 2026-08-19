@@ -142,6 +142,11 @@ def create_app(
         # yeni config'deki strip/bus'lar restart beklemeden poll edilsin
         app.state.voicemeeter_strip_indices = compute_strip_indices(config)
         app.state.voicemeeter_bus_indices = compute_bus_indices(config)
+        # media_keys.enabled degisikligi restart beklemeden hook'lara yansisin
+        listener = getattr(app.state, "media_key_listener", None)
+        if listener is not None:
+            listener.stop()
+            listener.start()
         await app.state.manager.broadcast({"type": "reload"})
         return {"status": "ok"}
 
@@ -490,9 +495,10 @@ def _connect_voicemeeter(kind: str):
         return None, None
 
 
-def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
+def configure_runtime(app, voicemeeter_kind: str = "banana", media_key_keyboard_module=None) -> None:
     from . import os_bridge
     from .discord_screenshare import DiscordScreenShareController
+    from .media_key_listener import MediaKeyListener
 
     # Voicemeeter kurulu/acik olmayabilir; bu durumda diger entegrasyonlar calismaya devam etmeli
     backend, voicemeeter_client = _connect_voicemeeter(voicemeeter_kind)
@@ -516,3 +522,14 @@ def configure_runtime(app, voicemeeter_kind: str = "banana") -> None:
     current_config = load_config(app.state.config_path)
     app.state.voicemeeter_strip_indices = compute_strip_indices(current_config)
     app.state.voicemeeter_bus_indices = compute_bus_indices(current_config)
+
+    listener_kwargs = {}
+    if media_key_keyboard_module is not None:
+        listener_kwargs["keyboard_module"] = media_key_keyboard_module
+    media_key_listener = MediaKeyListener(
+        get_client=lambda: app.state.voicemeeter_client,
+        get_config=lambda: load_config(app.state.config_path),
+        **listener_kwargs,
+    )
+    media_key_listener.start()
+    app.state.media_key_listener = media_key_listener

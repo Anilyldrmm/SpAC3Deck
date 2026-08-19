@@ -65,6 +65,27 @@
       <span>×</span>
       <input id="grid-rows-input" type="number" min="1" max="10" />
     </div>
+
+    <div class="settings-divider"></div>
+
+    <label id="media-keys-row" class="settings-toggle-row">
+      <input id="media-keys-enabled-checkbox" type="checkbox" />
+      Klavye medya tuşlarını (ses aç/kıs/sustur) Voicemeeter'a yönlendir
+    </label>
+    <div id="media-keys-detail">
+      <div class="field-row">
+        <label>Hedef</label>
+        <select id="media-keys-target-type"></select>
+      </div>
+      <div class="field-row">
+        <label>Kanal</label>
+        <select id="media-keys-target-index"></select>
+      </div>
+      <div class="field-row">
+        <label>Adım (dB)</label>
+        <input id="media-keys-step-input" type="number" min="0.5" max="12" step="0.5" />
+      </div>
+    </div>
   </div>
 
   <main id="workspace">

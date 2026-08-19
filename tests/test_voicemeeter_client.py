@@ -86,6 +86,22 @@ def test_get_gain_state_reads_through_backend():
     assert client.get_gain_state(0) == -12.0
 
 
+def test_step_gain_adds_delta_to_current_value():
+    backend = FakeBackend()
+    backend.gain[0] = -6.0
+    client = VoicemeeterClient(backend)
+    client.step_gain(0, 3.0)
+    assert backend.gain[0] == -3.0
+
+
+def test_step_bus_gain_adds_delta_to_current_value():
+    backend = FakeBackend()
+    backend.bus_gain[0] = -6.0
+    client = VoicemeeterClient(backend)
+    client.step_bus_gain(0, -3.0)
+    assert backend.bus_gain[0] == -9.0
+
+
 def test_list_strips_reads_through_backend():
     backend = FakeBackend()
     client = VoicemeeterClient(backend)
