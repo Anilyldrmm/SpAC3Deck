@@ -30,6 +30,11 @@ class VoicemeeterClient:
     def set_gain(self, strip_index: int, value: float) -> None:
         self._backend.set_gain(strip_index, value)
 
+    def step_gain(self, strip_index: int, delta: float) -> float:
+        new_value = self._backend.get_gain(strip_index) + delta
+        self._backend.set_gain(strip_index, new_value)
+        return new_value
+
     def toggle_route(self, strip_index: int, bus: str) -> bool:
         new_state = not self._backend.get_route(strip_index, bus)
         self._backend.set_route(strip_index, bus, new_state)
@@ -51,6 +56,11 @@ class VoicemeeterClient:
 
     def set_bus_gain(self, bus_index: int, value: float) -> None:
         self._backend.set_bus_gain(bus_index, value)
+
+    def step_bus_gain(self, bus_index: int, delta: float) -> float:
+        new_value = self._backend.get_bus_gain(bus_index) + delta
+        self._backend.set_bus_gain(bus_index, new_value)
+        return new_value
 
     def get_bus_mute_state(self, bus_index: int) -> bool:
         return self._backend.get_bus_mute(bus_index)
