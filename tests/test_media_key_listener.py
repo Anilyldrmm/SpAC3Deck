@@ -36,20 +36,34 @@ class FakeBackend:
 
 
 class FakeKeyboard:
-    def __init__(self):
-        self.registered = {}
-        self._next_hook_id = 0
-        self.removed = []
+    """add_hotkey(..., suppress=True) bu ortamda (Python 3.14 + keyboard 0.13.5)
+    hicbir olayi yakalamiyor - dogrulanmis (bkz. media_key_listener.py'deki
+    kok neden notu). MediaKeyListener bunun yerine hook()/unhook() kullaniyor,
+    bu yuzden test double'i da onu taklit ediyor."""
 
-    def add_hotkey(self, key, callback, suppress=False):
+    def __init__(self):
+        self.hooked = {}
+        self._next_hook_id = 0
+
+    def hook(self, callback):
         self._next_hook_id += 1
         hook_id = self._next_hook_id
-        self.registered[hook_id] = (key, callback, suppress)
+        self.hooked[hook_id] = callback
         return hook_id
 
-    def remove_hotkey(self, hook_id):
-        self.removed.append(hook_id)
-        del self.registered[hook_id]
+    def unhook(self, hook_id):
+        del self.hooked[hook_id]
+
+    def fire(self, name, event_type):
+        event = FakeEvent(name, event_type)
+        for callback in list(self.hooked.values()):
+            callback(event)
+
+
+class FakeEvent:
+    def __init__(self, name, event_type):
+        self.name = name
+        self.event_type = event_type
 
 
 def make_listener(config, client_or_none=FakeBackend, keyboard_module=None):
@@ -118,14 +132,14 @@ def test_no_voicemeeter_client_does_not_raise():
     listener._on_volume_up()  # raise etmemeli
 
 
-def test_start_does_not_register_hooks_when_disabled():
+def test_start_does_not_hook_when_disabled():
     config = DeckConfig(media_keys=MediaKeysConfig(enabled=False))
     fake_keyboard = FakeKeyboard()
     listener, _backend, _client = make_listener(config, keyboard_module=fake_keyboard)
 
     listener.start()
 
-    assert fake_keyboard.registered == {}
+    assert fake_keyboard.hooked == {}
 
 
 class RaisingBackend(FakeBackend):
@@ -150,35 +164,17 @@ def test_mute_does_not_raise_when_voicemeeter_call_fails():
     listener._on_mute()  # raise etmemeli
 
 
-def test_start_registers_volume_and_mute_hotkeys_with_suppress():
+def test_start_installs_single_raw_hook_when_enabled():
     config = DeckConfig(media_keys=MediaKeysConfig(enabled=True))
     fake_keyboard = FakeKeyboard()
     listener, _backend, _client = make_listener(config, keyboard_module=fake_keyboard)
 
     listener.start()
 
-    registered_keys = {key for key, _cb, _suppress in fake_keyboard.registered.values()}
-    assert registered_keys == {"volume up", "volume down", "volume mute"}
-    assert all(suppress is True for _key, _cb, suppress in fake_keyboard.registered.values())
+    assert len(fake_keyboard.hooked) == 1
 
 
-def test_start_uses_custom_key_bindings_when_set():
-    config = DeckConfig(media_keys=MediaKeysConfig(
-        enabled=True,
-        up_keys=["ctrl", "alt", "f19"],
-        down_keys=["ctrl", "alt", "f20"],
-        mute_keys=["f13"],
-    ))
-    fake_keyboard = FakeKeyboard()
-    listener, _backend, _client = make_listener(config, keyboard_module=fake_keyboard)
-
-    listener.start()
-
-    registered_keys = {key for key, _cb, _suppress in fake_keyboard.registered.values()}
-    assert registered_keys == {"ctrl+alt+f19", "ctrl+alt+f20", "f13"}
-
-
-def test_stop_removes_all_registered_hooks():
+def test_stop_removes_the_hook():
     config = DeckConfig(media_keys=MediaKeysConfig(enabled=True))
     fake_keyboard = FakeKeyboard()
     listener, _backend, _client = make_listener(config, keyboard_module=fake_keyboard)
@@ -186,4 +182,77 @@ def test_stop_removes_all_registered_hooks():
 
     listener.stop()
 
-    assert fake_keyboard.registered == {}
+    assert fake_keyboard.hooked == {}
+
+
+def test_default_volume_up_key_press_triggers_gain_step():
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=3.0))
+    fake_keyboard = FakeKeyboard()
+    listener, backend, _client = make_listener(config, keyboard_module=fake_keyboard)
+    backend.gain[0] = -6.0
+    listener.start()
+
+    fake_keyboard.fire("volume up", "down")
+
+    assert backend.gain[0] == -3.0
+
+
+def test_key_release_does_not_trigger():
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=3.0))
+    fake_keyboard = FakeKeyboard()
+    listener, backend, _client = make_listener(config, keyboard_module=fake_keyboard)
+    backend.gain[0] = -6.0
+    listener.start()
+
+    fake_keyboard.fire("volume up", "up")
+
+    assert backend.gain[0] == -6.0
+
+
+def test_custom_single_key_binding_triggers_matching_action():
+    config = DeckConfig(media_keys=MediaKeysConfig(
+        enabled=True, target_type="strip", target_index=0, step_db=1.0,
+        up_keys=["f13"], down_keys=["f14"], mute_keys=[],
+    ))
+    fake_keyboard = FakeKeyboard()
+    listener, backend, _client = make_listener(config, keyboard_module=fake_keyboard)
+    backend.gain[0] = 0.0
+    listener.start()
+
+    fake_keyboard.fire("f14", "down")
+
+    assert backend.gain[0] == -1.0
+
+
+def test_custom_key_binding_does_not_respond_to_old_default_key():
+    """up_keys ozel atanmisken artik 'volume up' tetiklememeli."""
+    config = DeckConfig(media_keys=MediaKeysConfig(
+        enabled=True, target_type="strip", target_index=0, step_db=1.0,
+        up_keys=["f13"],
+    ))
+    fake_keyboard = FakeKeyboard()
+    listener, backend, _client = make_listener(config, keyboard_module=fake_keyboard)
+    backend.gain[0] = 0.0
+    listener.start()
+
+    fake_keyboard.fire("volume up", "down")
+
+    assert backend.gain[0] == 0.0
+
+
+def test_multi_key_combo_requires_all_keys_held_before_triggering():
+    config = DeckConfig(media_keys=MediaKeysConfig(
+        enabled=True, target_type="strip", target_index=0, step_db=1.0,
+        up_keys=["ctrl", "alt", "f19"],
+    ))
+    fake_keyboard = FakeKeyboard()
+    listener, backend, _client = make_listener(config, keyboard_module=fake_keyboard)
+    backend.gain[0] = 0.0
+    listener.start()
+
+    fake_keyboard.fire("ctrl", "down")
+    fake_keyboard.fire("alt", "down")
+    assert backend.gain[0] == 0.0  # henuz f19 basilmadi
+
+    fake_keyboard.fire("f19", "down")
+    assert backend.gain[0] == 1.0

@@ -79,25 +79,25 @@ def test_put_config_recomputes_voicemeeter_strip_indices(tmp_path):
 
 class _FakeKeyboardForMediaKeys:
     def __init__(self):
-        self.registered = {}
+        self.hooked = {}
         self._next_id = 0
 
-    def add_hotkey(self, key, callback, suppress=False):
+    def hook(self, callback):
         self._next_id += 1
-        self.registered[self._next_id] = key
+        self.hooked[self._next_id] = callback
         return self._next_id
 
-    def remove_hotkey(self, hook_id):
-        del self.registered[hook_id]
+    def unhook(self, hook_id):
+        del self.hooked[hook_id]
 
 
 def test_put_config_toggles_media_key_listener_live(tmp_path):
-    """enabled ayari degisince restart beklemeden hook'lar kurulup kaldirilmali."""
+    """enabled ayari degisince restart beklemeden hook kurulup kaldirilmali."""
     client = build_client(tmp_path)
     app = client.app
     fake_keyboard = _FakeKeyboardForMediaKeys()
     configure_runtime(app, media_key_keyboard_module=fake_keyboard)
-    assert fake_keyboard.registered == {}  # varsayilan enabled=False
+    assert fake_keyboard.hooked == {}  # varsayilan enabled=False
 
     enable_response = client.put(
         "/api/config",
@@ -108,7 +108,7 @@ def test_put_config_toggles_media_key_listener_live(tmp_path):
         },
     )
     assert enable_response.status_code == 200
-    assert set(fake_keyboard.registered.values()) == {"volume up", "volume down", "volume mute"}
+    assert len(fake_keyboard.hooked) == 1
 
     disable_response = client.put(
         "/api/config",
@@ -119,7 +119,7 @@ def test_put_config_toggles_media_key_listener_live(tmp_path):
         },
     )
     assert disable_response.status_code == 200
-    assert fake_keyboard.registered == {}
+    assert fake_keyboard.hooked == {}
 
 
 def test_rest_rate_limits_failed_pin_attempts(tmp_path):

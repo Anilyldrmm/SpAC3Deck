@@ -21,23 +21,35 @@ _HANDLER_NAMES = {
 }
 
 
-def _resolve_bindings(media_keys) -> dict[str, str]:
-    """Her aksiyon icin kullanilacak hotkey string'ini dondurur: config'de
-    ozel tus kombinasyonu (up_keys/down_keys/mute_keys) tanimliysa onu,
-    yoksa varsayilan "volume up/down/mute" medya tusunu kullanir."""
+def _resolve_bindings(media_keys) -> dict[str, set[str]]:
+    """Her aksiyon icin gereken tus kumesini dondurur: config'de ozel tus
+    kombinasyonu (up_keys/down_keys/mute_keys) tanimliysa onu, yoksa
+    varsayilan "volume up/down/mute" medya tusunu kullanir."""
     overrides = {
         "up": media_keys.up_keys,
         "down": media_keys.down_keys,
         "mute": media_keys.mute_keys,
     }
     return {
-        action: "+".join(keys) if keys else _DEFAULT_KEYS[action]
+        action: set(keys) if keys else {_DEFAULT_KEYS[action]}
         for action, keys in overrides.items()
     }
 
 
 class MediaKeyListener:
-    """Klavye medya tuslarini (volume up/down/mute) Voicemeeter gain/mute'a yonlendirir.
+    """Klavye medya tuslarini (volume up/down/mute, ya da ozel bir tus
+    kombinasyonu) Voicemeeter gain/mute'a yonlendirir.
+
+    NOT: `keyboard.add_hotkey(..., suppress=True)` (ve cipiak
+    `keyboard.hook(cb, suppress=True)`) bu ortamda (Python 3.14 +
+    keyboard 0.13.5) hicbir olayi yakalamiyor - dogrulanmis (standalone
+    prob'larla): suppress=True verildigi an kutuphane hicbir key event'i
+    callback'e iletmiyor. Bu yuzden suppress=False `hook()` ile ham
+    olaylari izleyip eslesmeyi kendimiz yapiyoruz. Bunun bedeli: config'de
+    varsayilan "volume up/down/mute" kullanilirsa Windows'un kendi ses
+    OSD'si de ayni anda tetiklenir (bastirilamiyor) - ozel bir tusa (F13
+    vb.) remap edilirse bu sorun olmaz cunku o tusun zaten OS'ta bir
+    islevi yok.
 
     Her tus basisinda config + voicemeeter client'i taze okur; boylece
     ayarlar degisince (configurator'dan) dinleyiciyi yeniden baslatmaya
@@ -54,31 +66,42 @@ class MediaKeyListener:
         self._get_config = get_config
         self._keyboard = keyboard_module
         self._hooks: list[object] = []
+        self._pressed: set[str] = set()
 
     def start(self) -> None:
-        # enabled=False iken hook kurulmaz: suppress=True OS'un kendi ses
-        # tuslarini devre disi birakir, bunu sadece kullanici ozellikle
-        # actiginda yapmaliyiz - yoksa varsayilan kurulumda herkesin
-        # donanim ses tuslari sessizce calismaz olur.
-        media_keys = self._get_config().media_keys
-        if not media_keys.enabled:
+        if not self._get_config().media_keys.enabled:
             return
-        bindings = _resolve_bindings(media_keys)
         try:
-            for action, key in bindings.items():
-                handler = getattr(self, _HANDLER_NAMES[action])
-                hook = self._keyboard.add_hotkey(key, handler, suppress=True)
-                self._hooks.append(hook)
+            hook = self._keyboard.hook(self._handle_event)
+            self._hooks.append(hook)
         except Exception as exc:
             logger.warning("medya tusu dinleyicisi baslatilamadi: %s", exc)
 
     def stop(self) -> None:
         for hook in self._hooks:
             try:
-                self._keyboard.remove_hotkey(hook)
+                self._keyboard.unhook(hook)
             except (KeyError, ValueError) as exc:
-                logger.debug("hotkey kaldirilamadi: %s", exc)
+                logger.debug("hook kaldirilamadi: %s", exc)
         self._hooks.clear()
+        self._pressed.clear()
+
+    def _handle_event(self, event) -> None:
+        name = getattr(event, "name", None)
+        if name is None:
+            return
+        name = name.lower()
+        if event.event_type == "up":
+            self._pressed.discard(name)
+            return
+        if event.event_type != "down":
+            return
+        self._pressed.add(name)
+
+        bindings = _resolve_bindings(self._get_config().media_keys)
+        for action, required in bindings.items():
+            if required <= self._pressed:
+                getattr(self, _HANDLER_NAMES[action])()
 
     def _on_volume_up(self) -> None:
         self._apply_step(1)
