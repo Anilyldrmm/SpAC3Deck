@@ -82,6 +82,16 @@ class OsdSurface(Protocol):
     def destroy(self) -> None: ...
 
 
+def clamp_gain(gain_db: float) -> float:
+    """Gosterilecek dB degerini Voicemeeter'in kabul ettigi aralikta tutar.
+
+    `step_gain` hesapladigi ham toplami dondurur (Voicemeeter ise -60/+12'de
+    kirpar). Kirpmayi burada yapiyoruz: alternatif olan "yazdiktan hemen sonra
+    Voicemeeter'dan geri oku" tus basma yolunu Voicemeeter API'sine bagimli
+    hale getiriyor ve baglanti timeout'unda klavye hook'unu blokluyordu."""
+    return min(GAIN_MAX_DB, max(GAIN_MIN_DB, gain_db))
+
+
 def gain_fraction(gain_db: float) -> float:
     """dB degerini 0..1 arasi cubuk dolulugu yapar."""
     span = GAIN_MAX_DB - GAIN_MIN_DB
@@ -222,6 +232,7 @@ class VolumeOsd:
         """Karti gosterir; config'de kapatilmissa sessizce hicbir sey yapmaz."""
         if not self._osd_enabled():
             return
+        gain_db = clamp_gain(gain_db)
         frame = OsdFrame(
             label=label,
             gain_db=gain_db,

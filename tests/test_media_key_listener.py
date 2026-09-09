@@ -1,3 +1,6 @@
+import time
+
+from macrodeck import media_key_listener as media_key_listener_module
 from macrodeck.media_key_listener import MediaKeyListener
 from macrodeck.voicemeeter_client import VoicemeeterClient
 from macrodeck.config import DeckConfig, MediaKeysConfig
@@ -72,6 +75,16 @@ class FakeOsd:
 
     def show(self, label, gain_db, muted):
         self.shown.append((label, gain_db, muted))
+
+
+def wait_for_label(listener, key, timeout=2.0):
+    """Etiket cozumlemesi arka plan thread'inde yapiliyor; onbellege dusmesini bekler."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if key in listener._label_cache:
+            return listener._label_cache[key][0]
+        time.sleep(0.01)
+    raise AssertionError(f"etiket onbellege dusmedi: {key}")
 
 
 def make_listener(config, client_or_none=FakeBackend, keyboard_module=None, osd=None):
@@ -277,7 +290,7 @@ class LabeledBackend(FakeBackend):
         return [{"index": 1, "label": "Kulaklık"}]
 
 
-def test_volume_step_notifies_osd_with_new_gain_and_channel_label():
+def test_volume_step_notifies_osd_with_new_gain():
     config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=3.0))
     osd = FakeOsd()
     listener, backend, _client = make_listener(config, client_or_none=LabeledBackend(), osd=osd)
@@ -285,18 +298,103 @@ def test_volume_step_notifies_osd_with_new_gain_and_channel_label():
 
     listener._on_volume_up()
 
-    assert osd.shown == [("Mikrofon", -3.0, False)]
+    # ilk basista etiket henuz cozulmedi: yer tutucu gosterilir, deger dogru
+    assert osd.shown == [("Strip 0", -3.0, False)]
+
+
+def test_channel_label_is_resolved_in_the_background_and_used_next_press():
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=3.0))
+    osd = FakeOsd()
+    listener, backend, _client = make_listener(config, client_or_none=LabeledBackend(), osd=osd)
+    backend.gain[0] = -6.0
+
+    listener._on_volume_up()
+    assert wait_for_label(listener, ("strip", 0)) == "Mikrofon"
+    listener._on_volume_up()
+
+    assert [entry[0] for entry in osd.shown] == ["Strip 0", "Mikrofon"]
 
 
 def test_mute_toggle_notifies_osd_with_mute_state():
-    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="bus", target_index=1))
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="bus", target_index=1, step_db=2.0))
     osd = FakeOsd()
     listener, backend, _client = make_listener(config, client_or_none=LabeledBackend(), osd=osd)
-    backend.bus_gain[1] = -4.0
+    backend.bus_gain[1] = -6.0
 
+    listener._on_volume_up()  # son bilinen dB'yi kaydeder
+    assert wait_for_label(listener, ("bus", 1)) == "Kulaklık"
     listener._on_mute()
 
-    assert osd.shown == [("Kulaklık", -4.0, True)]
+    assert osd.shown == [("Bus 1", -4.0, False), ("Kulaklık", -4.0, True)]
+
+
+def test_mute_state_is_tracked_locally_and_shown_on_later_volume_steps():
+    """Mute'tan sonra ses degistirilince kart yine mute gostermeli - mute
+    durumu Voicemeeter'a sorulmadan, kendi toggle'imizdan izleniyor."""
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=1.0))
+    osd = FakeOsd()
+    listener, _backend, _client = make_listener(config, client_or_none=LabeledBackend(), osd=osd)
+
+    listener._on_mute()
+    listener._on_volume_down()
+
+    assert [entry[2] for entry in osd.shown] == [True, True]
+
+
+def test_volume_step_does_not_query_voicemeeter_state_for_the_osd():
+    """Regresyon: tus basma yolunda Voicemeeter'a fazladan sorgu atilmamali.
+
+    Yazdiktan sonra geri okumak, timeout ile kurulmus baglantida klavye hook
+    thread'ini bloklayip knob'u tamamen olu birakabiliyor."""
+    class CountingBackend(LabeledBackend):
+        def __init__(self):
+            super().__init__()
+            self.get_gain_calls = 0
+            self.get_mute_calls = 0
+
+        def get_gain(self, strip_index):
+            self.get_gain_calls += 1
+            return super().get_gain(strip_index)
+
+        def get_mute(self, strip_index):
+            self.get_mute_calls += 1
+            return super().get_mute(strip_index)
+
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=1.0))
+    backend = CountingBackend()
+    listener, _backend, _client = make_listener(config, client_or_none=backend, osd=FakeOsd())
+
+    listener._on_volume_up()
+    listener._on_volume_up()
+
+    # her basista yalnizca step_gain'in kendi okumasi (onceki degeri almak icin)
+    assert backend.get_gain_calls == 2
+    assert backend.get_mute_calls == 0
+
+
+def test_repeated_presses_do_not_relist_channels():
+    """Etiket alinamasa bile list_strips her basista cagrilmamali."""
+    class UnlabeledBackend(FakeBackend):
+        def __init__(self):
+            super().__init__()
+            self.list_calls = 0
+
+        def list_strips(self):
+            self.list_calls += 1
+            return [{"index": 0, "label": ""}]
+
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=1.0))
+    backend = UnlabeledBackend()
+    osd = FakeOsd()
+    listener, _backend, _client = make_listener(config, client_or_none=backend, osd=osd)
+
+    listener._on_volume_up()
+    wait_for_label(listener, ("strip", 0))
+    for _ in range(4):
+        listener._on_volume_up()
+
+    assert backend.list_calls == 1
+    assert [entry[0] for entry in osd.shown] == ["Strip 0"] * 5
 
 
 def test_osd_label_falls_back_when_channel_list_unavailable():
@@ -305,8 +403,10 @@ def test_osd_label_falls_back_when_channel_list_unavailable():
     listener, _backend, _client = make_listener(config, osd=osd)  # FakeBackend'de list_strips yok
 
     listener._on_volume_up()
+    wait_for_label(listener, ("strip", 2))
+    listener._on_volume_up()
 
-    assert osd.shown == [("Strip 2", 1.0, False)]
+    assert osd.shown == [("Strip 2", 1.0, False), ("Strip 2", 2.0, False)]
 
 
 def test_osd_channel_label_is_cached_after_first_lookup():
@@ -324,6 +424,7 @@ def test_osd_channel_label_is_cached_after_first_lookup():
     listener, _backend, _client = make_listener(config, client_or_none=backend, osd=FakeOsd())
 
     listener._on_volume_up()
+    wait_for_label(listener, ("strip", 0))
     listener._on_volume_up()
 
     assert backend.list_calls == 1
@@ -339,9 +440,9 @@ def test_failed_voicemeeter_call_does_not_notify_osd():
     assert osd.shown == []
 
 
-def test_osd_label_fallback_is_not_cached_so_it_recovers_after_reconnect():
-    """Kanal listesi henuz hazir olmadiginda "Strip 0" oturum sonuna kadar
-    yapismamali."""
+def test_osd_label_fallback_is_retried_after_the_retry_window(monkeypatch):
+    """Fallback etiket kisa sure onbellekte tutulur (her basista sorgu
+    atmayalim) ama baglanti duzelince kendini duzeltir."""
     class LateBackend(FakeBackend):
         def __init__(self):
             super().__init__()
@@ -352,16 +453,27 @@ def test_osd_label_fallback_is_not_cached_so_it_recovers_after_reconnect():
                 raise RuntimeError("voicemeeter hazir degil")
             return [{"index": 0, "label": "Mikrofon"}]
 
+    now = [1000.0]
+    monkeypatch.setattr(media_key_listener_module.time, "monotonic", lambda: now[0])
+
     config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=1.0))
     backend = LateBackend()
     osd = FakeOsd()
     listener, _backend, _client = make_listener(config, client_or_none=backend, osd=osd)
 
     listener._on_volume_up()
+    assert wait_for_label(listener, ("strip", 0)) == "Strip 0"  # fallback onbellekte
     backend.ready = True
-    listener._on_volume_up()
+    listener._on_volume_up()  # onbellek suresi dolmadi, tekrar sorulmaz
+    assert listener._label_cache[("strip", 0)][0] == "Strip 0"
 
-    assert [entry[0] for entry in osd.shown] == ["Strip 0", "Mikrofon"]
+    now[0] += media_key_listener_module.LABEL_RETRY_SECONDS + 1
+    listener._on_volume_up()  # sure doldu: arka planda yeniden sorar
+
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline and listener._label_cache[("strip", 0)][0] != "Mikrofon":
+        time.sleep(0.01)
+    assert listener._label_cache[("strip", 0)][0] == "Mikrofon"
 
 
 def test_stop_clears_the_label_cache():
@@ -374,18 +486,11 @@ def test_stop_clears_the_label_cache():
     assert listener._label_cache == {}
 
 
-def test_osd_shows_the_value_read_back_from_voicemeeter_not_the_raw_sum():
-    """Voicemeeter +12 dB'de kirpiyor; kart gerceklesmeyen bir deger yazmamali."""
-    class ClampingBackend(LabeledBackend):
-        def set_gain(self, strip_index, value):
-            self.gain[strip_index] = min(12.0, max(-60.0, value))
+def test_stop_clears_the_tracked_mute_state():
+    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0))
+    listener, _backend, _client = make_listener(config, client_or_none=LabeledBackend(), osd=FakeOsd())
+    listener._on_mute()
 
-    config = DeckConfig(media_keys=MediaKeysConfig(enabled=True, target_type="strip", target_index=0, step_db=3.0))
-    backend = ClampingBackend()
-    backend.gain[0] = 11.0
-    osd = FakeOsd()
-    listener, _backend, _client = make_listener(config, client_or_none=backend, osd=osd)
+    listener.stop()
 
-    listener._on_volume_up()
-
-    assert osd.shown == [("Mikrofon", 12.0, False)]
+    assert listener._label_cache == {}
