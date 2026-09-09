@@ -1,5 +1,6 @@
 // web/deck/app.js
 const PIN_STORAGE_KEY = "macrodeck_pin";
+const ROTATED_STORAGE_KEY = "macrodeck_rotated";
 const VOICEMEETER_ACTIONS = ["voicemeeter_mute", "voicemeeter_gain", "voicemeeter_route"];
 const VOICEMEETER_BUS_ACTIONS = ["voicemeeter_bus_mute", "voicemeeter_bus_gain"];
 const RECONNECT_BASE_MS = 2000;
@@ -36,6 +37,7 @@ const deckEl = document.getElementById("deck");
 const tabsEl = document.getElementById("page-tabs");
 const gridEl = document.getElementById("button-grid");
 const connBanner = document.getElementById("conn-banner");
+const rotateToggle = document.getElementById("rotate-toggle");
 
 let config = null;
 let currentPage = 0;
@@ -145,6 +147,22 @@ const resizeGridThrottled = throttle(resizeGridToSquareCells, 100);
 window.addEventListener("resize", resizeGridThrottled);
 window.addEventListener("orientationchange", () => setTimeout(resizeGridToSquareCells, 50));
 
+// Ekran dondurmesi artik telefonun fiziksel yonune degil, #rotate-toggle
+// tusuna bagli - son secim hatirlanip her acilista geri uygulanir.
+function applyRotation(rotated) {
+  deckEl.classList.toggle("rotated", rotated);
+  resizeGridToSquareCells();
+}
+
+const storedRotated = safeStorageGet(ROTATED_STORAGE_KEY) === "1";
+applyRotation(storedRotated);
+
+rotateToggle.addEventListener("click", () => {
+  const next = !deckEl.classList.contains("rotated");
+  applyRotation(next);
+  safeStorageSet(ROTATED_STORAGE_KEY, next ? "1" : "0");
+});
+
 async function connectWithPin(pin) {
   clearPinError();
   if (!pin) {
@@ -175,6 +193,7 @@ async function connectWithPin(pin) {
   safeStorageSet(PIN_STORAGE_KEY, pin);
   pinGate.hidden = true;
   deckEl.hidden = false;
+  rotateToggle.hidden = false;
   setConnected(false);
   try {
     renderTabs();
