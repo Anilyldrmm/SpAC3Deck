@@ -14,7 +14,6 @@ body {
   background: #111;
   color: #eee;
   overscroll-behavior: none;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* --- PIN gate --- */
@@ -53,7 +52,21 @@ body {
 .error-text { margin: 0; color: #ff6b6b; font-size: 13px; }
 
 /* --- Deck view --- */
-#deck { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+/* env(safe-area-inset-*) body'nin kendi padding'i uzerinden miras alinirdi
+   ama PWA standalone modda (Ana Ekrana Ekle) bazi iOS surumlerinde 0 donebiliyor
+   - #deck.rotated'de zaten uygulanan ayni savunma burada da: env() + sabit
+   minimum px beraber, boylece sekmeler/dugmeler notch/Dynamic Island altinda
+   kalmiyor. */
+#deck {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: max(env(safe-area-inset-top), 16px);
+  padding-right: max(env(safe-area-inset-right), 0px);
+  padding-bottom: max(env(safe-area-inset-bottom), 16px);
+  padding-left: max(env(safe-area-inset-left), 0px);
+}
 
 /* baglanti koptugunda gorunur, normalde tamamen gizli */
 #conn-banner {
@@ -66,7 +79,11 @@ body {
 }
 
 /* tek sayfa varsa JS bunu hidden yapar, alan kazanilir */
-#page-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 6px 10px 0; flex: none; }
+/* justify-content: safe center -> az sekme varsa ortalanir (kenara/notch'a
+   yapismaz), sekmeler konteynere sigmayinca "safe" flex-start'a duser, boylece
+   Safari'nin "centered + overflow" ile soldaki sekmeleri kirpma hatasina
+   dusulmez, kaydirma her zaman calisir. */
+#page-tabs { display: flex; justify-content: safe center; gap: 6px; overflow-x: auto; padding: 6px 10px 0; flex: none; }
 #page-tabs[hidden] { display: none; }
 #page-tabs button {
   flex: none;
@@ -98,39 +115,63 @@ body {
   overflow-y: auto;
 }
 
-/* Telefon donme kilidi acik olsa bile deck (buton) ekranini gorsel olarak
-   yataya cevirir. PIN girme ekrani (#pin-gate) kasitli olarak buna dahil
-   degil - dik kalmasi gerekiyor, telefon zaten dik tutulurken doldurulur.
+/* Rotasyon artik telefonun fiziksel yonune degil, sag-alt kosedeki dondurme
+   tusuna (#rotate-toggle, app.js) basilmasina bagli - "rotated" class'i JS
+   tarafindan eklenip cikariliyor, son secim localStorage'da kalici. PIN girme
+   ekrani (#pin-gate) kasitli olarak buna dahil degil, dik kalmasi gerekiyor.
    Viewport gercekte dikey kalir, sadece render CSS transform ile dondurulur.
    position:absolute + top:100% mobilde pozisyon baglamina bagimli kalip
    elementi viewport disina itebiliyor ("kayboluyor") - onun yerine tek
    transform icinde rotate+translate kombinasyonu kullaniliyor, position'a
    hic ihtiyac yok, bu yuzden daha guvenilir. */
-@media screen and (orientation: portrait) {
-  #deck {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vh;
-    height: 100vw;
-    overflow: hidden;
-    transform-origin: left top;
-    transform: rotate(90deg) translateY(-100%);
-    box-sizing: border-box;
-    /* #deck fixed oldugu icin body'nin safe-area padding'ini miras almiyor.
-       env(safe-area-inset-*) rotate edilmis context'te guvenilir sonuc
-       vermeyebiliyor (bazi cihaz/tarayici kombinasyonlarinda 0 donuyor) -
-       bu yuzden env()'e ek olarak cihazdan bagimsiz, notch/Dynamic Island/
-       kamera ve home-indicator'i her zaman guvenle atlayacak sabit bir
-       minimum bosluk (40px) garanti ediliyor. Boylece icerik hep ekranin
-       "guvenli ortasinda" kalir, hangi kenarin kameraya denk geldigi onemli
-       olmaz. */
-    padding-top: max(env(safe-area-inset-left), 40px);
-    padding-right: max(env(safe-area-inset-top), 40px);
-    padding-bottom: max(env(safe-area-inset-right), 40px);
-    padding-left: max(env(safe-area-inset-bottom), 40px);
-  }
+#deck.rotated {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vh;
+  height: 100vw;
+  overflow: hidden;
+  transform-origin: left top;
+  transform: rotate(90deg) translateY(-100%);
+  box-sizing: border-box;
+  /* #deck fixed oldugu icin body'nin safe-area padding'ini miras almiyor.
+     env(safe-area-inset-*) rotate edilmis context'te guvenilir sonuc
+     vermeyebiliyor (bazi cihaz/tarayici kombinasyonlarinda 0 donuyor) -
+     bu yuzden env()'e ek olarak cihazdan bagimsiz, notch/Dynamic Island/
+     kamera ve home-indicator'i her zaman guvenle atlayacak sabit bir
+     minimum bosluk (40px) garanti ediliyor. Boylece icerik hep ekranin
+     "guvenli ortasinda" kalir, hangi kenarin kameraya denk geldigi onemli
+     olmaz. */
+  padding-top: max(env(safe-area-inset-left), 40px);
+  padding-right: max(env(safe-area-inset-top), 40px);
+  padding-bottom: max(env(safe-area-inset-right), 40px);
+  padding-left: max(env(safe-area-inset-bottom), 40px);
 }
+
+/* #deck disinda, body'nin dogrudan cocugu - #deck.rotated'in transform'u
+   kendi icindeki fixed/absolute elemanlar icin ayri bir containing block
+   olusturur (CSS spec), o yuzden buton #deck'in DISINDA tutuluyor; boylece
+   dondurme durumundan bagimsiz hep fiziksel ekranin sag-alt kosesinde kalir. */
+#rotate-toggle {
+  position: fixed;
+  right: max(env(safe-area-inset-right), 12px);
+  bottom: max(env(safe-area-inset-bottom), 12px);
+  z-index: 1000;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(30, 30, 30, 0.85);
+  color: #eee;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+#rotate-toggle[hidden] { display: none; }
+#rotate-toggle:active { background: #2a2a2a; }
 
 .deck-button {
   position: relative;

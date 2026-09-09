@@ -29,6 +29,7 @@ def release_key(keys: list[str]) -> None:
 
 
 def launch_uri(uri: str) -> None:
+    uri = uri.strip().strip('"')
     os.startfile(uri)
 
 

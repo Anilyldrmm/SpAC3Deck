@@ -17,9 +17,27 @@ _BUS_ATTR = {
 
 
 class RealVoicemeeterBackend:
-    def __init__(self, kind: str = "banana"):
-        self._vm = voicemeeterlib.api(kind)
-        self._vm.login()
+    def __init__(self, kind: str = "banana", timeout: float = 10.0):
+        # varsayilan kutuphane timeout'u 2sn: MacroDeck Voicemeeter'dan once
+        # acilirsa login(), Voicemeeter GUI'sini kendi baslatir (VBVMR_RunVoicemeeter)
+        # ve GUI'nin ilk acilisi 2sn'den uzun surebilir - bu durumda hazir-olma
+        # kontrolu timeout'la patlar, oysa VBVMR_Login zaten basarili olmustur.
+        vm = voicemeeterlib.api(kind, timeout=timeout)
+        try:
+            vm.login()
+        except Exception:
+            # login() Voicemeeter'i henuz acikken (ornegin GUI daha yeni
+            # baslatildiginda) VBVMR_Login'i basariyla cagirip R isigini
+            # yakabilir, sonra hazir-olma kontrolu timeout'la patlayabilir.
+            # Logout cagrilmazsa DLL surec-genelinde "login" durumunda kalir:
+            # Voicemeeter'da R isigi sonsuza dek yanik kalir ve sonraki
+            # yeniden-baglanma denemeleri de bu yuzden basarisiz olur.
+            try:
+                vm.logout()
+            except Exception:
+                pass
+            raise
+        self._vm = vm
 
     def set_mute(self, strip_index: int, muted: bool) -> None:
         self._vm.strip[strip_index].mute = muted
