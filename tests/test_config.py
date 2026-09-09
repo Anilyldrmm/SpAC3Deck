@@ -35,6 +35,9 @@ def test_save_writes_valid_json(tmp_path):
             "up_keys": [],
             "down_keys": [],
             "mute_keys": [],
+            "osd_enabled": True,
+            "osd_x": None,
+            "osd_y": None,
         },
     }
 

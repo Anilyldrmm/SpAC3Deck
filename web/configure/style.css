@@ -58,6 +58,18 @@ body {
   cursor: pointer;
 }
 .page-tab-remove:hover { background: #3a2020; color: #e88; }
+.page-tab-rename-btn {
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+}
+.page-tab-rename-btn:hover { background: #26283a; color: #8b8fff; }
 #add-page {
   width: 28px; height: 28px;
   border-radius: 8px;
@@ -171,6 +183,19 @@ body {
   font-size: 13px;
   text-align: center;
 }
+
+.osd-placement-btn {
+  padding: 7px 12px;
+  border-radius: 7px;
+  border: 1px solid #333542;
+  background: #26272e;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+}
+.osd-placement-btn:hover:not(:disabled) { background: #33344a; color: #fff; }
+.osd-placement-btn:disabled { opacity: 0.5; cursor: default; }
+.osd-placement-btn.active { background: #33344a; border-color: #6266ff; color: #8b8fff; }
 
 .history-undo-row { display: flex; gap: 8px; }
 .history-undo-row button {

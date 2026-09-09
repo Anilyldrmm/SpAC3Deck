@@ -268,3 +268,84 @@ def test_upload_and_list_sound(tmp_path):
     assert listing.status_code == 200
     assert len(listing.json()) == 1
     assert listing.json()[0]["file"] == upload.json()["file"]
+
+
+# --- /api/osd/placement ---
+
+class _FakeOsd:
+    def __init__(self, running=True):
+        self.calls = []
+        self.running = running
+
+    def is_running(self):
+        return self.running
+
+    def set_placement(self, active):
+        self.calls.append(active)
+        return (-1200, 300)
+
+
+def test_osd_placement_requires_pin(tmp_path):
+    client = build_client(tmp_path)
+    response = client.post("/api/osd/placement", json={"active": True})
+    assert response.status_code == 403
+
+
+def test_osd_placement_toggles_mode_and_returns_position(tmp_path):
+    client = build_client(tmp_path)
+    osd = _FakeOsd()
+    client.app.state.volume_osd = osd
+
+    response = client.post("/api/osd/placement", params={"token": "1234"}, json={"active": True})
+
+    assert response.status_code == 200
+    assert response.json() == {"active": True, "x": -1200, "y": 300}
+    assert osd.calls == [True]
+
+
+def test_osd_placement_without_osd_returns_503(tmp_path):
+    """Gosterge kurulamadiysa (headless/tkinter yok) anlamli hata donmeli."""
+    client = build_client(tmp_path)
+    response = client.post("/api/osd/placement", params={"token": "1234"}, json={"active": True})
+    assert response.status_code == 503
+
+
+def test_osd_placement_with_dead_osd_thread_returns_503(tmp_path):
+    """tkinter kurulamayinca nesne var ama thread olu; 200 donup configurator'u
+    olmayan bir karti konumlandirdigina inandirmamali."""
+    client = build_client(tmp_path)
+    client.app.state.volume_osd = _FakeOsd(running=False)
+
+    response = client.post("/api/osd/placement", params={"token": "1234"}, json={"active": True})
+
+    assert response.status_code == 503
+
+
+def test_osd_placement_is_refused_when_osd_disabled_in_config(tmp_path):
+    client = build_client(tmp_path)
+    osd = _FakeOsd()
+    client.app.state.volume_osd = osd
+    config = client.get("/api/config", params={"token": "1234"}).json()
+    config["media_keys"]["osd_enabled"] = False
+    assert client.put("/api/config", params={"token": "1234"}, json=config).status_code == 200
+
+    response = client.post("/api/osd/placement", params={"token": "1234"}, json={"active": True})
+
+    assert response.status_code == 409
+    assert osd.calls == []
+
+
+def test_osd_placement_can_always_be_turned_off(tmp_path):
+    """Gosterge sonradan kapatilsa bile takili kalan yerlestirme modu
+    kapatilabilmeli."""
+    client = build_client(tmp_path)
+    osd = _FakeOsd()
+    client.app.state.volume_osd = osd
+    config = client.get("/api/config", params={"token": "1234"}).json()
+    config["media_keys"]["osd_enabled"] = False
+    client.put("/api/config", params={"token": "1234"}, json=config)
+
+    response = client.post("/api/osd/placement", params={"token": "1234"}, json={"active": False})
+
+    assert response.status_code == 200
+    assert osd.calls == [False]

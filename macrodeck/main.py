@@ -16,6 +16,8 @@ import win32event
 import winerror
 
 from . import updater
+from .config import load_config
+from .osd import create_volume_osd
 from .paths import app_data_dir, is_frozen
 from .qr import generate_deck_url
 from .server import create_app, configure_runtime
@@ -183,11 +185,20 @@ class AppLifecycle:
             self._configurator_window = None
 
     def shutdown(self):
-        """Voicemeeter oturumunu ve medya tusu dinleyicisini kapatir (idempotent)."""
+        """Voicemeeter oturumunu, medya tusu dinleyicisini ve ses gostergesini
+        kapatir (idempotent)."""
         listener = getattr(self._app.state, "media_key_listener", None)
         if listener is not None:
             listener.stop()
             self._app.state.media_key_listener = None
+
+        osd = getattr(self._app.state, "volume_osd", None)
+        if osd is not None:
+            try:
+                osd.stop()
+            except Exception as exc:
+                logger.debug("ses gostergesi kapatilamadi: %s", exc)
+            self._app.state.volume_osd = None
 
         backend = getattr(self._app.state, "voicemeeter_backend", None)
         if backend is None:
@@ -245,7 +256,10 @@ def main() -> None:
     lan_ip = _get_lan_ip()
     pin = load_or_create_pin(app_data_dir() / "pin.txt")
     app = create_app(config_path=CONFIG_PATH, pin=pin, lan_ip=lan_ip, port=PORT)
-    configure_runtime(app, voicemeeter_kind="banana")
+    # ekran ustu ses gostergesi kendi thread'inde calisir; config'i her
+    # gosterimde taze okur, boylece configurator'dan aciklip kapanabilir
+    volume_osd = create_volume_osd(lambda: load_config(CONFIG_PATH))
+    configure_runtime(app, voicemeeter_kind="banana", osd=volume_osd)
 
     server_thread = threading.Thread(target=_run_server, args=(app,), daemon=True)
     server_thread.start()
