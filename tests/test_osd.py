@@ -11,6 +11,7 @@ from macrodeck.osd import (
     PLACEMENT_TIMEOUT_SECONDS,
     SCREEN_MARGIN,
     VolumeOsd,
+    clamp_gain,
     default_position,
     format_gain,
     gain_fraction,
@@ -411,3 +412,21 @@ def test_is_running_is_false_before_start_and_after_stop():
     osd.stop()
 
     assert osd.is_running() is False
+
+
+def test_clamp_gain_keeps_the_card_within_voicemeeter_range():
+    """step_gain ham toplami dondurur; kart "+21.0 dB" gibi gerceklesmeyen bir
+    deger yazmamali."""
+    assert clamp_gain(21.0) == 12.0
+    assert clamp_gain(-90.0) == -60.0
+    assert clamp_gain(-6.0) == -6.0
+
+
+def test_show_clamps_the_displayed_value():
+    osd, surface, _clock, _config = make_osd()
+
+    osd.show("Strip 0", 21.0, muted=False)
+    osd.tick()
+
+    assert surface.frames[-1].gain_db == 12.0
+    assert surface.frames[-1].fraction == 1.0
