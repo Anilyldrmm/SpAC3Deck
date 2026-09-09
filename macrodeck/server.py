@@ -82,6 +82,19 @@ def create_app(
     )
     app.state.activate_callback = None  # main.py doldurur (AppLifecycle.open_configurator)
 
+    @app.middleware("http")
+    async def _no_cache_static(request: Request, call_next):
+        # iOS PWA (Ana Ekrana Ekle) HTML/CSS/JS'i asiri agresif cache'liyor -
+        # ETag/Last-Modified'a ragmen guncelleme sonrasi eski surumde takili
+        # kalabiliyor. /deck ve /configure her istekte revalidate etsin diye
+        # no-cache zorlaniyor (ikon/ses gibi /api/icon,/api/sound cache'leri
+        # bundan etkilenmez, onlar ayri, kendi Cache-Control header'ini kullanir).
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/deck") or path.startswith("/configure"):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
     def _pin_matches(token: str | None) -> bool:
         if token is None:
             return False
@@ -228,6 +241,25 @@ def create_app(
             return []
         return client.list_buses()
 
+    @app.post("/api/osd/placement")
+    def set_osd_placement(request: Request, payload: dict, token: str | None = None):
+        """Ses gostergesini surukle-birak ile konumlandirma modunu ac/kapat.
+
+        Kapatilirken donen {x, y} configurator tarafindan config'e yazilir;
+        OSD kendisi config dosyasina yazmaz."""
+        _require_auth(request, token)
+        osd = app.state.volume_osd
+        if osd is None or not osd.is_running():
+            # tkinter kurulamamis ya da OSD thread'i olmus olabilir; 200 donup
+            # configurator'un olmayan bir karti konumlandirdigini sanmasindansa
+            # anlamli hata don
+            raise HTTPException(status_code=503, detail="ses gostergesi kullanilamiyor")
+        active = bool(payload.get("active"))
+        if active and not load_config(app.state.config_path).media_keys.osd_enabled:
+            raise HTTPException(status_code=409, detail="ses gostergesi kapali")
+        x, y = osd.set_placement(active)
+        return {"active": active, "x": x, "y": y}
+
     @app.get("/api/sources/monitors")
     def get_monitors(request: Request, token: str | None = None):
         _require_auth(request, token)
@@ -358,6 +390,7 @@ def create_app(
     app.state.voicemeeter_kind = "banana"  # configure_runtime doldurur
     app.state.voicemeeter_strip_indices: list[int] = []
     app.state.voicemeeter_bus_indices: list[int] = []
+    app.state.volume_osd = None  # configure_runtime doldurur (main.py verirse)
 
     RECONNECT_INTERVAL = 5.0
     _last_reconnect_attempt = 0.0
@@ -495,7 +528,16 @@ def _connect_voicemeeter(kind: str):
         return None, None
 
 
-def configure_runtime(app, voicemeeter_kind: str = "banana", media_key_keyboard_module=None) -> None:
+def configure_runtime(
+    app,
+    voicemeeter_kind: str = "banana",
+    media_key_keyboard_module=None,
+    osd=None,
+) -> None:
+    """Gercek OS entegrasyonlarini app.state'e baglar.
+
+    `osd` (ekran ustu ses gostergesi) main.py tarafindan verilir; testler ve
+    headless kullanim icin None birakilabilir - o zaman gosterge hic kurulmaz."""
     from . import os_bridge
     from .discord_screenshare import DiscordScreenShareController
     from .media_key_listener import MediaKeyListener
@@ -523,12 +565,15 @@ def configure_runtime(app, voicemeeter_kind: str = "banana", media_key_keyboard_
     app.state.voicemeeter_strip_indices = compute_strip_indices(current_config)
     app.state.voicemeeter_bus_indices = compute_bus_indices(current_config)
 
+    app.state.volume_osd = osd
+
     listener_kwargs = {}
     if media_key_keyboard_module is not None:
         listener_kwargs["keyboard_module"] = media_key_keyboard_module
     media_key_listener = MediaKeyListener(
         get_client=lambda: app.state.voicemeeter_client,
         get_config=lambda: load_config(app.state.config_path),
+        osd=osd,
         **listener_kwargs,
     )
     media_key_listener.start()

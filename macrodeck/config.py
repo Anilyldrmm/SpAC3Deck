@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -33,6 +34,12 @@ class MediaKeysConfig(BaseModel):
     up_keys: list[str] = Field(default_factory=list)
     down_keys: list[str] = Field(default_factory=list)
     mute_keys: list[str] = Field(default_factory=list)
+    # ekran ustu ses gostergesi (OSD). osd_x/osd_y sanal ekran koordinatidir -
+    # yan monitorde x negatif olabilir, bu yuzden ayri bir "monitor sec" alani
+    # yok. None ise ana ekranin alt ortasi kullanilir.
+    osd_enabled: bool = True
+    osd_x: int | None = None
+    osd_y: int | None = None
 
 
 class DeckConfig(BaseModel):
@@ -50,8 +57,13 @@ def load_config(path: Path) -> DeckConfig:
 
 
 def save_config(config: DeckConfig, path: Path) -> None:
+    """Config'i atomik yazar (gecici dosya + os.replace).
+
+    Dogrudan write_text dosyayi once bosaltip sonra doldurur; medya tusu
+    dinleyicisi ve ses gostergesi config'i her tus basisinda okudugu icin bu
+    araligda yarim dosya okunup parse hatasi alinabiliyordu."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(config.model_dump(), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    payload = json.dumps(config.model_dump(), indent=2, ensure_ascii=False)
+    tmp_path = path.with_name(path.name + ".tmp")
+    tmp_path.write_text(payload, encoding="utf-8")
+    os.replace(tmp_path, path)

@@ -61,12 +61,15 @@ class MediaKeyListener:
         get_client: Callable[[], object | None],
         get_config: Callable[[], DeckConfig],
         keyboard_module=_default_keyboard_module,
+        osd=None,
     ):
         self._get_client = get_client
         self._get_config = get_config
         self._keyboard = keyboard_module
+        self._osd = osd
         self._hooks: list[object] = []
         self._pressed: set[str] = set()
+        self._label_cache: dict[tuple[str, int], str] = {}
 
     def start(self) -> None:
         if not self._get_config().media_keys.enabled:
@@ -85,6 +88,8 @@ class MediaKeyListener:
                 logger.debug("hook kaldirilamadi: %s", exc)
         self._hooks.clear()
         self._pressed.clear()
+        # yeniden baglanmada Voicemeeter etiketleri degismis olabilir
+        self._label_cache.clear()
 
     def _handle_event(self, event) -> None:
         name = getattr(event, "name", None)
@@ -124,6 +129,8 @@ class MediaKeyListener:
                 client.step_gain(media_keys.target_index, delta)
         except Exception as exc:
             logger.warning("voicemeeter gain ayarlanamadi: %s", exc)
+            return
+        self._notify_osd(media_keys, client)
 
     def _on_mute(self) -> None:
         media_keys = self._get_config().media_keys
@@ -139,3 +146,56 @@ class MediaKeyListener:
                 client.toggle_mute(media_keys.target_index)
         except Exception as exc:
             logger.warning("voicemeeter mute ayarlanamadi: %s", exc)
+            return
+        self._notify_osd(media_keys, client)
+
+    def _notify_osd(self, media_keys, client) -> None:
+        """Ekran ustu gostergeyi guncel gain/mute degeri ile tetikler.
+
+        Degerler Voicemeeter'dan geri okunur: `step_gain` hesapladigi ham
+        toplami dondurur, Voicemeeter ise -60/+12 dB'de kirpar - okumadan
+        gosterirsek kart gerceklesmeyen bir deger ("+21.0 dB") yazardi.
+        Gosterge yoksa hicbir ek okuma yapilmaz (etiket cozumlemesi de bu
+        kontrolun arkasinda)."""
+        if self._osd is None:
+            return
+        try:
+            if media_keys.target_type == "bus":
+                gain = client.get_bus_gain_state(media_keys.target_index)
+                muted = client.get_bus_mute_state(media_keys.target_index)
+            else:
+                gain = client.get_gain_state(media_keys.target_index)
+                muted = client.get_mute_state(media_keys.target_index)
+            self._osd.show(self._target_label(media_keys, client), gain, muted)
+        except Exception as exc:
+            logger.debug("ses gostergesi gosterilemedi: %s", exc)
+
+    def _target_label(self, media_keys, client) -> str:
+        """Hedef kanalin Voicemeeter etiketini dondurur (onbellekli).
+
+        Her tus basisinda list_strips/list_buses cagirmamak icin sonuc
+        onbellege alinir; etiket alinamazsa (baglanti kopuk) onbellege
+        yazilmaz, sonraki denemede tekrar sorulur."""
+        key = (media_keys.target_type, media_keys.target_index)
+        cached = self._label_cache.get(key)
+        if cached is not None:
+            return cached
+        kind = "Bus" if media_keys.target_type == "bus" else "Strip"
+        fallback = f"{kind} {media_keys.target_index}"
+        try:
+            channels = (
+                client.list_buses() if media_keys.target_type == "bus" else client.list_strips()
+            )
+        except Exception as exc:
+            logger.debug("voicemeeter kanal etiketi alinamadi: %s", exc)
+            return fallback
+        for channel in channels:
+            if channel.get("index") == media_keys.target_index:
+                label = channel.get("label")
+                if label:
+                    self._label_cache[key] = label
+                    return label
+                break
+        # fallback onbellege yazilmaz: kanal listesi henuz hazir olmadiginda
+        # "Strip 0" oturum sonuna kadar yapismasin
+        return fallback

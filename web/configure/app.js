@@ -245,7 +245,12 @@ function renderTabs() {
       renderTabs();
       renderGrid();
     });
-    nameEl.addEventListener("dblclick", (event) => {
+    // tab surukleyerek siralanabildigi (draggable=true) icin cift tiklama
+    // sirasindaki en ufak fare hareketi bazi tarayicilarda surukleme baslatma
+    // olarak algilanip dblclick'i yutabiliyor - bu yuzden guvenilir, tek
+    // tiklamalik ayri bir kalem butonu asil rename yolu; dblclick sadece
+    // masaustunde ekstra kisayol olarak kalsin diye korunuyor.
+    const startRename = (event) => {
       event.stopPropagation();
       const input = document.createElement("input");
       input.type = "text";
@@ -265,9 +270,19 @@ function renderTabs() {
       tab.replaceChild(input, nameEl);
       input.focus();
       input.select();
-    });
+    };
+    nameEl.addEventListener("dblclick", startRename);
 
     tab.appendChild(nameEl);
+
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "page-tab-rename-btn";
+    renameBtn.textContent = "✎";
+    renameBtn.title = "Sayfayı yeniden adlandır";
+    renameBtn.draggable = false;
+    renameBtn.addEventListener("click", startRename);
+    tab.appendChild(renameBtn);
 
     if (config.pages.length > 1) {
       const removeBtn = document.createElement("button");
@@ -1221,9 +1236,14 @@ function renderMediaKeysSettings() {
     up_keys: [],
     down_keys: [],
     mute_keys: [],
+    osd_enabled: true,
+    osd_x: null,
+    osd_y: null,
   });
 
   document.getElementById("media-keys-enabled-checkbox").checked = mediaKeys.enabled;
+  document.getElementById("osd-enabled-checkbox").checked = mediaKeys.osd_enabled !== false;
+  renderOsdPlacementButton();
   document.getElementById("media-keys-step-input").value = mediaKeys.step_db;
   renderMediaKeysCaptureButton("media-keys-up-capture", mediaKeys.up_keys, "Volume Up (varsayılan)");
   renderMediaKeysCaptureButton("media-keys-down-capture", mediaKeys.down_keys, "Volume Down (varsayılan)");
@@ -1345,6 +1365,97 @@ document.getElementById("media-keys-step-input").addEventListener("change", (eve
   const step = parseFloat(event.target.value);
   if (Number.isFinite(step) && step > 0) config.media_keys.step_db = step;
   scheduleSave();
+});
+
+// --- ekran üstü ses göstergesi (OSD) ---
+
+// Yerleştirme modunun tek doğruluk kaynağı sunucudan dönen `active` alanı:
+// istek başarısız olursa mod sunucuda ne durumdaysa öyle kalır, buton da onu
+// yansıtır (yoksa moddan çıkmak iki tık sürer).
+let osdPlacementActive = false;
+
+function renderOsdPositionHint(message) {
+  const hint = document.getElementById("osd-position-hint");
+  if (message) {
+    hint.textContent = message;
+    return;
+  }
+  if (osdPlacementActive) {
+    hint.textContent = "Göstergeyi istediğin ekrana sürükle, sonra Konumu kaydet'e bas.";
+    return;
+  }
+  const mediaKeys = config.media_keys ?? {};
+  hint.textContent =
+    mediaKeys.osd_x === null || mediaKeys.osd_x === undefined
+      ? "Varsayılan konum: ana ekranın alt ortası."
+      : `Konum: X ${mediaKeys.osd_x}, Y ${mediaKeys.osd_y}`;
+}
+
+function renderOsdPlacementButton(message) {
+  const button = document.getElementById("osd-placement-btn");
+  const enabled = (config.media_keys ?? {}).osd_enabled !== false;
+  button.textContent = osdPlacementActive ? "Konumu kaydet" : "Konumu ayarla";
+  button.classList.toggle("active", osdPlacementActive);
+  // gösterge kapalıyken yerleştirme modu kartı ekrana getirmesin
+  button.disabled = !enabled && !osdPlacementActive;
+  renderOsdPositionHint(message);
+}
+
+document.getElementById("osd-enabled-checkbox").addEventListener("change", (event) => {
+  config.media_keys.osd_enabled = event.target.checked;
+  renderOsdPlacementButton();
+  scheduleSave();
+});
+
+async function setOsdPlacement(active) {
+  const response = await fetch(`/api/osd/placement?token=${encodeURIComponent(TOKEN)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ active }),
+  });
+  if (!response.ok) throw new Error(`placement isteği başarısız: ${response.status}`);
+  return response.json();
+}
+
+document.getElementById("osd-placement-btn").addEventListener("click", async () => {
+  const button = document.getElementById("osd-placement-btn");
+  const leaving = osdPlacementActive;
+  button.disabled = true;
+  try {
+    const result = await setOsdPlacement(!leaving);
+    osdPlacementActive = Boolean(result.active);
+    if (leaving) {
+      config.media_keys.osd_x = result.x;
+      config.media_keys.osd_y = result.y;
+      renderOsdPlacementButton();
+      scheduleSave();
+    } else {
+      renderOsdPlacementButton();
+    }
+  } catch (error) {
+    console.error(error);
+    renderOsdPlacementButton(
+      leaving
+        ? "Yerleştirme modu kapatılamadı, tekrar dene."
+        : "Gösterge şu an kullanılamıyor (MacroDeck'i yeniden başlatmayı dene)."
+    );
+  } finally {
+    button.disabled = false;
+  }
+});
+
+// Configurator penceresi yerleştirme modunda kapatılırsa kart ekranda fare
+// olayı alan halde kalır ve odağı çalar - kapanışta modu bırak. (Sunucuda
+// ayrıca bir zaman aşımı var, bu ilk savunma.)
+window.addEventListener("beforeunload", () => {
+  if (!osdPlacementActive) return;
+  const url = `/api/osd/placement?token=${encodeURIComponent(TOKEN)}`;
+  const payload = JSON.stringify({ active: false });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
+    return;
+  }
+  fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true });
 });
 
 function updateGridSize() {
