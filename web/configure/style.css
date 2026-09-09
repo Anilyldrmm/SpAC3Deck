@@ -137,6 +137,10 @@ body {
   padding: 16px;
   max-width: 280px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  /* ayarlar listesi uzadikca popover pencere altina tasip ulasilamaz
+     hale gelmesin - icinde kaysin */
+  max-height: calc(100vh - 70px);
+  overflow-y: auto;
 }
 #qr-popover { text-align: center; }
 #qr-popover h3, #bridge-popover h3, #history-popover h3, #settings-popover h3 {
