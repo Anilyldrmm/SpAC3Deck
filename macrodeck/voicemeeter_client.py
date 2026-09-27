@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from typing import Protocol
 
+# Voicemeeter gain araligi; kirpmadan yazarsak voicemeeterlib'in set->get
+# onbellegi kirpilmamis degeri (+15, +18...) dondurur ve ses +12'de takilir
+GAIN_MIN_DB = -60.0
+GAIN_MAX_DB = 12.0
+
+
+def _clamp_gain(value: float) -> float:
+    return max(GAIN_MIN_DB, min(GAIN_MAX_DB, value))
+
 
 class VoicemeeterBackend(Protocol):
     def set_mute(self, strip_index: int, muted: bool) -> None: ...
@@ -31,7 +40,7 @@ class VoicemeeterClient:
         self._backend.set_gain(strip_index, value)
 
     def step_gain(self, strip_index: int, delta: float) -> float:
-        new_value = self._backend.get_gain(strip_index) + delta
+        new_value = _clamp_gain(self._backend.get_gain(strip_index) + delta)
         self._backend.set_gain(strip_index, new_value)
         return new_value
 
@@ -58,7 +67,7 @@ class VoicemeeterClient:
         self._backend.set_bus_gain(bus_index, value)
 
     def step_bus_gain(self, bus_index: int, delta: float) -> float:
-        new_value = self._backend.get_bus_gain(bus_index) + delta
+        new_value = _clamp_gain(self._backend.get_bus_gain(bus_index) + delta)
         self._backend.set_bus_gain(bus_index, new_value)
         return new_value
 

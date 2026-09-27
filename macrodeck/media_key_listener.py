@@ -116,9 +116,12 @@ class MediaKeyListener:
             return
         self._pressed.add(name)
 
+        # yalnizca az once basilan tus binding'in parcasiysa tetikle: knob'un
+        # key-up olayi kaybolursa tus _pressed'de takili kalir ve aksi halde
+        # sonraki her tus basisi (oyunda WASD, typematic tekrar) sesi +12'ye kosturur
         bindings = _resolve_bindings(self._get_config().media_keys)
         for action, required in bindings.items():
-            if required <= self._pressed:
+            if name in required and required <= self._pressed:
                 getattr(self, _HANDLER_NAMES[action])()
 
     def _on_volume_up(self) -> None:

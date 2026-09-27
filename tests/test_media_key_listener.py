@@ -494,3 +494,43 @@ def test_stop_clears_the_tracked_mute_state():
     listener.stop()
 
     assert listener._label_cache == {}
+
+
+def test_stuck_bound_key_does_not_turn_other_keys_into_volume_up():
+    """Knob'un f13 key-up olayi kaybolursa f13 _pressed'de takili kalir.
+    Eskiden bundan sonra her tus basisi (oyunda W/A/S/D, typematic tekrar)
+    required <= _pressed kosulunu saglayip +step uyguluyordu - ses aninda
+    +12'ye kosuyordu. Aksiyon yalnizca basilan tus binding'in parcasiysa
+    tetiklenmeli."""
+    config = DeckConfig(media_keys=MediaKeysConfig(
+        enabled=True, target_type="strip", target_index=0, step_db=1.0,
+        up_keys=["f13"], down_keys=["f14"],
+    ))
+    keyboard = FakeKeyboard()
+    listener, backend, _ = make_listener(config, keyboard_module=keyboard)
+    backend.gain[0] = -20.0
+    listener.start()
+
+    keyboard.fire("f13", "down")  # up olayi hic gelmiyor
+    for _ in range(30):
+        keyboard.fire("w", "down")
+        keyboard.fire("w", "up")
+
+    assert backend.gain[0] == -19.0
+
+
+def test_stuck_up_key_does_not_fire_up_when_down_key_pressed():
+    config = DeckConfig(media_keys=MediaKeysConfig(
+        enabled=True, target_type="strip", target_index=0, step_db=1.0,
+        up_keys=["f13"], down_keys=["f14"],
+    ))
+    keyboard = FakeKeyboard()
+    listener, backend, _ = make_listener(config, keyboard_module=keyboard)
+    backend.gain[0] = -20.0
+    listener.start()
+
+    keyboard.fire("f13", "down")  # takili kaldi
+    keyboard.fire("f14", "down")
+    keyboard.fire("f14", "up")
+
+    assert backend.gain[0] == -20.0

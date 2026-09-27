@@ -181,3 +181,23 @@ def test_dispatch_voicemeeter_bus_gain_action_requires_set_event():
     assert backend.bus_gain[0] == -3.0
     dispatch("voicemeeter_bus_gain", {"bus_index": 0, "value": 99.0}, context, "press")
     assert backend.bus_gain[0] == -3.0
+
+
+def test_step_gain_clamps_to_voicemeeter_range():
+    backend = FakeBackend()
+    backend.gain[0] = 11.5
+    client = VoicemeeterClient(backend)
+
+    assert client.step_gain(0, 3.0) == 12.0
+    assert backend.gain[0] == 12.0
+
+    backend.gain[0] = -59.0
+    assert client.step_gain(0, -3.0) == -60.0
+
+
+def test_step_bus_gain_clamps_to_voicemeeter_range():
+    backend = FakeBackend()
+    backend.bus_gain[0] = 12.0
+    client = VoicemeeterClient(backend)
+
+    assert client.step_bus_gain(0, 1.0) == 12.0
