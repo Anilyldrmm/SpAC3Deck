@@ -22,7 +22,11 @@ class RealVoicemeeterBackend:
         # acilirsa login(), Voicemeeter GUI'sini kendi baslatir (VBVMR_RunVoicemeeter)
         # ve GUI'nin ilk acilisi 2sn'den uzun surebilir - bu durumda hazir-olma
         # kontrolu timeout'la patlar, oysa VBVMR_Login zaten basarili olmustur.
-        vm = voicemeeterlib.api(kind, timeout=timeout)
+        # sync=True: her okumadan once Voicemeeter'in dirty bayragi temizlenir.
+        # Olmazsa DLL eski degeri dondurmeye devam eder - Voicemeeter'dan elle
+        # yapilan degisiklik gorulmez, toggle eski degerin tersini (yani ayni
+        # degeri) yazar ve telefondaki durum kendi kendine acilip kapanir.
+        vm = voicemeeterlib.api(kind, timeout=timeout, sync=True)
         try:
             vm.login()
         except Exception:
