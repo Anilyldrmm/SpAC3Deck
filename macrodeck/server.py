@@ -443,6 +443,9 @@ def create_app(
         return None
 
     app.state.last_voicemeeter_state = {}
+    # BetterDiscord bridge'inden gelen son durum (yayin/yayin sesi/kamera) -
+    # sonradan baglanan telefonlara da gonderilebilsin diye saklanir
+    app.state.last_discord_state = {}
     app.state.voicemeeter_client = None  # configure_runtime doldurur
     app.state.voicemeeter_backend = None
     app.state.voicemeeter_kind = "banana"  # configure_runtime doldurur
@@ -508,6 +511,11 @@ def create_app(
             return
 
         await app.state.manager.connect(websocket)
+        # state sadece degisince yayinlaniyor; yeni baglanan telefon mevcut
+        # toggle durumlarini (mute, yayin, yayin sesi, kamera) hemen gormeli
+        snapshot = {**app.state.last_voicemeeter_state, **app.state.last_discord_state}
+        if snapshot:
+            await websocket.send_json({"type": "state", "data": snapshot})
         try:
             while True:
                 msg = await websocket.receive_json()
@@ -557,12 +565,18 @@ def create_app(
                 if message.get("type") == "state":
                     data = {k: v for k, v in message.items() if k != "type"}
                     logger.info("discord bridge state: %s", data)
+                    app.state.last_discord_state.update(data)
                     await app.state.manager.broadcast({"type": "state", "data": data})
         except WebSocketDisconnect:
             pass
         finally:
             app.state.discord_bridge.disconnect(websocket)
             logger.info("discord bridge baglantisi kesildi")
+            # Discord kapandi/plugin durdu: telefonda eski "acik" durumu kalmasin
+            if app.state.last_discord_state:
+                reset = {key: False for key in app.state.last_discord_state}
+                app.state.last_discord_state = {}
+                await app.state.manager.broadcast({"type": "state", "data": reset})
 
     web_root = get_web_root()
     app.mount("/deck", StaticFiles(directory=web_root / "deck", html=True), name="deck")

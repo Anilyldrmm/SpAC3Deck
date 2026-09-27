@@ -127,6 +127,18 @@ def test_put_config_broadcasts_reload_to_connected_clients(tmp_path):
         assert ws.receive_json() == {"type": "reload"}
 
 
+def test_ws_sends_current_state_snapshot_on_connect(tmp_path):
+    """Sonradan baglanan telefon toggle durumlarini (mute, yayin, yayin sesi) hemen gormeli."""
+    client, _ = build_client(tmp_path)
+    client.app.state.last_voicemeeter_state = {"strip0_mute": True}
+    client.app.state.last_discord_state = {"discord_streaming": True, "discord_sound": False}
+    with client.websocket_connect("/ws?token=1234") as ws:
+        assert ws.receive_json() == {
+            "type": "state",
+            "data": {"strip0_mute": True, "discord_streaming": True, "discord_sound": False},
+        }
+
+
 @pytest.mark.asyncio
 async def test_broadcast_handles_dead_sockets():
     """Test that broadcast() with dead sockets doesn't break delivery to others"""

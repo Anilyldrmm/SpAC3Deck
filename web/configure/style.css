@@ -253,6 +253,7 @@ body {
   display: grid;
   grid-template-columns: repeat(5, 96px);
   gap: 14px;
+  width: max-content;
   margin: 0 auto;
 }
 .grid-cell {
@@ -273,7 +274,10 @@ body {
   color: #444;
   font-size: 22px;
 }
+.grid-cell.empty.placeholder { font-size: 0; border-color: #25262c; }
 .grid-cell.filled { border-color: #333542; }
+/* telefonda ekrana sigmayan (asagi kaydirilan) butonlar */
+.grid-cell.overflow { opacity: 0.55; }
 .grid-cell.selected { border-color: #6266ff; box-shadow: 0 0 0 2px rgba(98,102,255,0.35); }
 .grid-cell.drag-over { border-color: #6266ff; background: #26283a; }
 

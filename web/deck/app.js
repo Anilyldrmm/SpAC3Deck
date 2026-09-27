@@ -7,6 +7,14 @@ const RECONNECT_BASE_MS = 2000;
 const STEAM_ICON_REV = 2;
 const RECONNECT_MAX_MS = 8000;
 const SLIDER_THROTTLE_MS = 60;
+// data-kind -> durum rozeti metni (active class'i varken "on")
+const STATE_BADGE_TEXT = {
+  mute: { on: "SESSİZ", off: "AÇIK" },
+  "bus-mute": { on: "SESSİZ", off: "AÇIK" },
+  screenshare: { on: "AÇIK", off: "KAPALI" },
+  "stream-sound": { on: "AÇIK", off: "KAPALI" },
+  camera: { on: "AÇIK", off: "KAPALI" },
+};
 
 // slider surukleme gibi sik tetiklenen olaylarda gonderimi sinirlar (WS trafigi
 // + backend'deki Voicemeeter yazma cagrilarini azaltir)
@@ -331,6 +339,17 @@ function renderPage(index) {
     labelEl.textContent = button.label;
 
     el.append(iconEl, labelEl);
+
+    // toggle butonlarda durum hep gorunsun (ozellikle tam kaplayan gorselde
+    // yesil arka plan gorunmuyordu); metin CSS'te .active'e gore secilir
+    const badgeText = STATE_BADGE_TEXT[el.dataset.kind];
+    if (badgeText) {
+      const badgeEl = document.createElement("span");
+      badgeEl.className = "state-badge";
+      badgeEl.dataset.on = badgeText.on;
+      badgeEl.dataset.off = badgeText.off;
+      el.appendChild(badgeEl);
+    }
 
     if (button.action === "hotkey_hold") {
       el.addEventListener("touchstart", () => sendEvent(page.name, button.id, "press"));

@@ -351,10 +351,24 @@ function renderGrid() {
   const page = currentPage();
   if (!page) return;
 
+  // telefondaki izgarayla ayni sutun/satir: bos slotlar da cizilir ki
+  // butonlarin telefonda hangi hucreye dusecegi birebir gorulsun
+  const cols = config.grid_columns || 5;
+  const rows = config.grid_rows || 3;
+  gridEl.style.gridTemplateColumns = `repeat(${cols}, 96px)`;
+  const slotCount = Math.max(cols * rows, page.buttons.length + 1);
+
   page.buttons.forEach((button, index) => {
-    gridEl.appendChild(renderCell(button, index));
+    const cell = renderCell(button, index);
+    // telefonda ekrana sigmayip asagi kaydirmayla ulasilan butonlar
+    if (index >= cols * rows) cell.classList.add("overflow");
+    gridEl.appendChild(cell);
   });
-  gridEl.appendChild(renderEmptyCell(page.buttons.length));
+  for (let slot = page.buttons.length; slot < slotCount; slot += 1) {
+    const cell = renderEmptyCell(page.buttons.length);
+    if (slot > page.buttons.length) cell.classList.add("placeholder");
+    gridEl.appendChild(cell);
+  }
 }
 
 function renderCell(button, index) {
@@ -1476,6 +1490,7 @@ function updateGridSize() {
   const rows = parseInt(document.getElementById("grid-rows-input").value, 10);
   if (Number.isFinite(columns) && columns >= 1) config.grid_columns = columns;
   if (Number.isFinite(rows) && rows >= 1) config.grid_rows = rows;
+  renderGrid();
   scheduleSave();
 }
 
