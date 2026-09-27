@@ -74,21 +74,36 @@ def _store_header_url(appid: str) -> str | None:
     return (entry.get("data") or {}).get("header_image")
 
 
-def _load_steam_icon(appid: str) -> bytes | None:
-    """Oyun kapagini bulur: once Steam'in yerel kutuphane onbellegi (ag yok,
-    yeni oyunlarin hash'li dosyalari dahil), sonra eski sabit CDN adresi, en
-    son Store API'nin verdigi header_image. Hicbiri yoksa None."""
-    local = find_local_steam_image(appid)
-    if local is not None:
-        try:
-            return local.read_bytes()
-        except OSError as exc:
-            logger.warning("steam yerel gorsel okunamadi (%s): %s", appid, exc)
+_STEAM_CDN = "https://cdn.cloudflare.steamstatic.com/steam/apps"
+# once kutuphanedeki dikey kapak, yoksa magaza header'i
+_STEAM_CDN_IMAGES = ("library_600x900.jpg", "header.jpg")
 
+
+def _image_media_type(content: bytes) -> str:
+    return "image/png" if content.startswith(b"\x89PNG") else "image/jpeg"
+
+
+def _read_local_steam_icon(appid: str) -> bytes | None:
+    """Kullanicinin ozel kapagi ya da Steam'in yerel kutuphane onbellegindeki
+    dikey kapak (ag gerekmez, yeni oyunlarin hash'li dosyalari dahil)."""
+    local = find_local_steam_image(appid)
+    if local is None:
+        return None
     try:
-        return _download(f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg")
+        return local.read_bytes()
     except OSError as exc:
-        logger.info("steam cdn gorseli yok (%s): %s", appid, exc)
+        logger.warning("steam yerel gorsel okunamadi (%s): %s", appid, exc)
+        return None
+
+
+def _download_steam_icon(appid: str) -> bytes | None:
+    """Yerelde yoksa: CDN'deki kutuphane kapagi, header, en son Store API'nin
+    verdigi header_image (yeni oyunlarda hash'li adres). Hicbiri yoksa None."""
+    for name in _STEAM_CDN_IMAGES:
+        try:
+            return _download(f"{_STEAM_CDN}/{appid}/{name}")
+        except OSError as exc:
+            logger.info("steam cdn gorseli yok (%s/%s): %s", appid, name, exc)
 
     try:
         header_url = _store_header_url(appid)
@@ -317,20 +332,25 @@ def create_app(
         if not appid.isdigit():
             raise HTTPException(status_code=400, detail="invalid appid")
 
-        cache_dir = app.state.config_path.parent / "icon_cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        icon_path = cache_dir / f"steam_{appid}.jpg"
-
-        if not icon_path.exists():
-            content = _load_steam_icon(appid)
-            if content is None:
-                raise HTTPException(status_code=502, detail="icon indirilemedi")
-            icon_path.write_bytes(content)
+        content = _read_local_steam_icon(appid)
+        if content is None:
+            # yalnizca agdan inenler onbelleklenir; yerel dosya her istekte
+            # okunur ki Steam'de kapak degisince buton da degissin. Ad "lib":
+            # eski surumun steam_<appid>.jpg'si magaza header'iydi.
+            cache_dir = app.state.config_path.parent / "icon_cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            icon_path = cache_dir / f"steam_lib_{appid}"
+            if not icon_path.exists():
+                downloaded = _download_steam_icon(appid)
+                if downloaded is None:
+                    raise HTTPException(status_code=502, detail="icon indirilemedi")
+                icon_path.write_bytes(downloaded)
+            content = icon_path.read_bytes()
 
         return Response(
-            content=icon_path.read_bytes(),
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=604800"},
+            content=content,
+            media_type=_image_media_type(content),
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     _UPLOAD_EXTENSIONS = {

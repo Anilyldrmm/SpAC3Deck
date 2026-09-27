@@ -316,9 +316,14 @@ document.getElementById("add-page").addEventListener("click", () => {
 
 // --- grid ---
 
+// Steam kapagi magaza header'indan kutuphane kapagina gecti; eski gorsel
+// tarayici onbelleginde kalmasin diye URL'yi degistiren surum parametresi
+const STEAM_ICON_REV = 2;
+
 function iconSrc(icon) {
   if (icon.startsWith("/api/icon/")) {
-    return `${icon}${icon.includes("?") ? "&" : "?"}token=${encodeURIComponent(TOKEN)}`;
+    const rev = icon.startsWith("/api/icon/steam/") ? `v=${STEAM_ICON_REV}&` : "";
+    return `${icon}${icon.includes("?") ? "&" : "?"}${rev}token=${encodeURIComponent(TOKEN)}`;
   }
   return icon;
 }

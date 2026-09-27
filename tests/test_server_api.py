@@ -423,3 +423,44 @@ def test_steam_icon_falls_back_to_store_api_header_when_cdn_404(tmp_path, monkey
 
     assert response.status_code == 200
     assert response.content == b"\xff\xd8store"
+
+
+def test_steam_icon_prefers_library_portrait_on_cdn_and_sniffs_png(tmp_path, monkeypatch):
+    import io
+    import macrodeck.server as server_module
+
+    monkeypatch.setattr(server_module, "find_local_steam_image", lambda appid: None)
+    requested = []
+
+    def _urlopen(url, timeout=None):
+        requested.append(url)
+        if url.endswith("/library_600x900.jpg"):
+            return io.BytesIO(b"\x89PNG\r\n\x1a\nportrait")
+        raise AssertionError(url)
+
+    monkeypatch.setattr(server_module.urllib.request, "urlopen", _urlopen)
+    client = build_client(tmp_path)
+
+    response = client.get("/api/icon/steam/730", params={"token": "1234"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert requested == ["https://cdn.cloudflare.steamstatic.com/steam/apps/730/library_600x900.jpg"]
+
+
+def test_steam_icon_ignores_old_header_cache_file(tmp_path, monkeypatch):
+    """Onceki surum magaza header'ini steam_<appid>.jpg olarak onbellekledi;
+    kutuphane kapagina gecince o dosya kullanilmamali."""
+    import macrodeck.server as server_module
+
+    local = tmp_path / "library_600x900.jpg"
+    local.write_bytes(b"\xff\xd8portrait")
+    monkeypatch.setattr(server_module, "find_local_steam_image", lambda appid: local)
+    client = build_client(tmp_path)
+    cache_dir = client.app.state.config_path.parent / "icon_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / "steam_730.jpg").write_bytes(b"\xff\xd8oldheader")
+
+    response = client.get("/api/icon/steam/730", params={"token": "1234"})
+
+    assert response.content == b"\xff\xd8portrait"

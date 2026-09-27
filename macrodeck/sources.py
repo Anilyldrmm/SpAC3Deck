@@ -31,16 +31,29 @@ def find_steam_path() -> Path | None:
         return None
 
 
-# tercih sirasi: yatay kapak (buton icin en uygun) -> dikey kapak -> hero.
-# Yeni oyunlarda dosyalar hash'li alt klasorlerde ve dil soneki alabiliyor
-# (library_capsule_turkish.jpg), bu yuzden onek eslemesi yapiyoruz.
+# tercih sirasi: Steam kutuphanesinde gorunen dikey kapak -> magaza header'i
+# (dikey kapagi olmayan araclar icin) -> hero. Yeni oyunlarda dosyalar hash'li
+# alt klasorlerde ve dil soneki alabiliyor (library_capsule_turkish.jpg), bu
+# yuzden onek eslemesi yapiyoruz.
 _STEAM_IMAGE_PREFIXES = (
-    "header",
-    "library_header",
     "library_600x900",
     "library_capsule",
+    "header",
+    "library_header",
     "library_hero",
 )
+_CUSTOM_GRID_EXTENSIONS = (".png", ".jpg", ".jpeg")
+
+
+def find_custom_steam_grid(steam_path: Path, appid: str) -> Path | None:
+    """Kullanicinin kutuphanede atadigi ozel dikey kapak
+    (userdata/<hesap>/config/grid/<appid>p.*); Steam varsa onu gosterir."""
+    for grid in sorted(steam_path.glob("userdata/*/config/grid")):
+        for extension in _CUSTOM_GRID_EXTENSIONS:
+            candidate = grid / f"{appid}p{extension}"
+            if candidate.is_file():
+                return candidate
+    return None
 
 
 def pick_cached_steam_image(app_dir: Path) -> Path | None:
@@ -62,7 +75,9 @@ def find_local_steam_image(appid: str) -> Path | None:
     steam_path = find_steam_path()
     if steam_path is None:
         return None
-    return pick_cached_steam_image(steam_path / "appcache" / "librarycache" / appid)
+    return find_custom_steam_grid(steam_path, appid) or pick_cached_steam_image(
+        steam_path / "appcache" / "librarycache" / appid
+    )
 
 
 def _steamapps_dirs(steam_path: Path) -> list[Path]:

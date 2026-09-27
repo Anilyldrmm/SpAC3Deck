@@ -4,6 +4,7 @@ const ROTATED_STORAGE_KEY = "macrodeck_rotated";
 const VOICEMEETER_ACTIONS = ["voicemeeter_mute", "voicemeeter_gain", "voicemeeter_route"];
 const VOICEMEETER_BUS_ACTIONS = ["voicemeeter_bus_mute", "voicemeeter_bus_gain"];
 const RECONNECT_BASE_MS = 2000;
+const STEAM_ICON_REV = 2;
 const RECONNECT_MAX_MS = 8000;
 const SLIDER_THROTTLE_MS = 60;
 
@@ -309,7 +310,9 @@ function renderPage(index) {
     iconEl.className = "icon";
     if (button.icon && button.icon.startsWith("/api/icon/")) {
       const img = document.createElement("img");
-      img.src = `${button.icon}?token=${encodeURIComponent(currentPin)}`;
+      // Steam kapagi kutuphane kapagina gecti; eski gorsel onbellekte kalmasin
+      const rev = button.icon.startsWith("/api/icon/steam/") ? `v=${STEAM_ICON_REV}&` : "";
+      img.src = `${button.icon}?${rev}token=${encodeURIComponent(currentPin)}`;
       iconEl.appendChild(img);
     } else if (button.icon && button.icon.startsWith("http")) {
       const img = document.createElement("img");
