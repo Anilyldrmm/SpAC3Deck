@@ -66,15 +66,18 @@ def create_app(
     pin: str | None = None,
     lan_ip: str | None = None,
     port: int = DEFAULT_PORT,
+    deck_host: str | None = None,
 ) -> FastAPI:
     app = FastAPI()
     app.state.config_path = config_path
     app.state.pin = pin or generate_pin()
     app.state.lan_ip = lan_ip
+    # QR'a yazilan sabit ad (`<pc-adi>.local`); DHCP IP'si degisse de gecerli kalir
+    app.state.deck_host = deck_host
     app.state.port = port
     app.state.rate_limiter = AttemptLimiter()
     app.state.allowed_origins = build_allowed_origins(
-        ["localhost", "127.0.0.1", lan_ip], port
+        ["localhost", "127.0.0.1", lan_ip, deck_host], port
     )
     app.state.discord_bridge = DiscordBridge()
     app.state.bridge_token = load_or_create_bridge_token(
@@ -182,7 +185,7 @@ def create_app(
     @app.get("/api/qr")
     def get_qr(request: Request, token: str | None = None):
         _require_auth(request, token)
-        host = app.state.lan_ip or request.url.hostname or "127.0.0.1"
+        host = app.state.deck_host or app.state.lan_ip or request.url.hostname or "127.0.0.1"
         png = generate_qr_png(generate_deck_url(host, app.state.port, app.state.pin))
         return Response(
             content=png,

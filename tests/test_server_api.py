@@ -349,3 +349,31 @@ def test_osd_placement_can_always_be_turned_off(tmp_path):
 
     assert response.status_code == 200
     assert osd.calls == [False]
+
+
+def test_qr_prefers_stable_deck_host_over_lan_ip(tmp_path):
+    client = build_client(tmp_path, lan_ip="192.168.1.10", port=8765)
+    client.app.state.deck_host = "desktop-spac3.local"
+    captured = []
+    import macrodeck.server as server_module
+    original = server_module.generate_qr_png
+    server_module.generate_qr_png = lambda url: captured.append(url) or original(url)
+    try:
+        client.get("/api/qr", params={"token": "1234"})
+    finally:
+        server_module.generate_qr_png = original
+    assert captured == ["http://desktop-spac3.local:8765/deck?token=1234"]
+
+
+def test_deck_host_origin_is_allowlisted(tmp_path):
+    config_path = tmp_path / "deck.json"
+    from macrodeck.server import create_app
+    from fastapi.testclient import TestClient
+    app = create_app(config_path=config_path, pin="1234", lan_ip="192.168.1.10",
+                     port=8765, deck_host="desktop-spac3.local")
+    response = TestClient(app).get(
+        "/api/config",
+        params={"token": "1234"},
+        headers={"Origin": "http://desktop-spac3.local:8765"},
+    )
+    assert response.status_code == 200

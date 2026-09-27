@@ -19,7 +19,7 @@ from . import updater
 from .config import load_config
 from .osd import create_volume_osd
 from .paths import app_data_dir, is_frozen
-from .qr import generate_deck_url
+from .qr import generate_deck_url, local_hostname
 from .server import create_app, configure_runtime
 from .state import load_or_create_pin
 from .tray import start_tray
@@ -255,7 +255,8 @@ def main() -> None:
 
     lan_ip = _get_lan_ip()
     pin = load_or_create_pin(app_data_dir() / "pin.txt")
-    app = create_app(config_path=CONFIG_PATH, pin=pin, lan_ip=lan_ip, port=PORT)
+    deck_host = local_hostname()
+    app = create_app(config_path=CONFIG_PATH, pin=pin, lan_ip=lan_ip, port=PORT, deck_host=deck_host)
     # ekran ustu ses gostergesi kendi thread'inde calisir; config'i her
     # gosterimde taze okur, boylece configurator'dan aciklip kapanabilir
     volume_osd = create_volume_osd(lambda: load_config(CONFIG_PATH))
@@ -264,7 +265,7 @@ def main() -> None:
     server_thread = threading.Thread(target=_run_server, args=(app,), daemon=True)
     server_thread.start()
 
-    deck_url = generate_deck_url(lan_ip, PORT, app.state.pin)
+    deck_url = generate_deck_url(deck_host or lan_ip, PORT, app.state.pin)
     configurator_url = f"http://localhost:{PORT}/configure?token={app.state.pin}"
     print(f"Deck URL: {deck_url}")
     print(f"Configurator URL: {configurator_url}")
