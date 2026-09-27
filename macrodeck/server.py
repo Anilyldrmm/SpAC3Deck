@@ -23,7 +23,7 @@ from .discord_bridge import DiscordBridge, load_or_create_bridge_token
 from .paths import web_root as get_web_root
 from .qr import generate_deck_url, generate_qr_png
 from .security import AttemptLimiter, build_allowed_origins, origin_allowed
-from .sources import list_monitors, list_steam_games
+from .sources import find_local_steam_image, list_monitors, list_steam_games
 from .state import generate_pin, compute_diff
 from .actions.context import ActionContext
 from .actions.registry import dispatch
@@ -59,6 +59,44 @@ def compute_bus_indices(config: DeckConfig) -> list[int]:
             if button.action in _BUS_ACTIONS:
                 bus_indices.add(button.params.get("bus_index", 0))
     return sorted(bus_indices)
+
+
+def _download(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=5) as resp:
+        return resp.read()
+
+
+def _store_header_url(appid: str) -> str | None:
+    url = f"https://store.steampowered.com/api/appdetails?appids={appid}&filters=basic"
+    entry = json.loads(_download(url)).get(appid) or {}
+    if not entry.get("success"):
+        return None
+    return (entry.get("data") or {}).get("header_image")
+
+
+def _load_steam_icon(appid: str) -> bytes | None:
+    """Oyun kapagini bulur: once Steam'in yerel kutuphane onbellegi (ag yok,
+    yeni oyunlarin hash'li dosyalari dahil), sonra eski sabit CDN adresi, en
+    son Store API'nin verdigi header_image. Hicbiri yoksa None."""
+    local = find_local_steam_image(appid)
+    if local is not None:
+        try:
+            return local.read_bytes()
+        except OSError as exc:
+            logger.warning("steam yerel gorsel okunamadi (%s): %s", appid, exc)
+
+    try:
+        return _download(f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg")
+    except OSError as exc:
+        logger.info("steam cdn gorseli yok (%s): %s", appid, exc)
+
+    try:
+        header_url = _store_header_url(appid)
+        if header_url:
+            return _download(header_url)
+    except (OSError, ValueError) as exc:
+        logger.warning("steam store gorseli alinamadi (%s): %s", appid, exc)
+    return None
 
 
 def create_app(
@@ -284,13 +322,10 @@ def create_app(
         icon_path = cache_dir / f"steam_{appid}.jpg"
 
         if not icon_path.exists():
-            url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
-            try:
-                with urllib.request.urlopen(url, timeout=5) as resp:
-                    icon_path.write_bytes(resp.read())
-            except OSError as exc:
-                logger.warning("steam ikon indirilemedi (%s): %s", appid, exc)
+            content = _load_steam_icon(appid)
+            if content is None:
                 raise HTTPException(status_code=502, detail="icon indirilemedi")
+            icon_path.write_bytes(content)
 
         return Response(
             content=icon_path.read_bytes(),

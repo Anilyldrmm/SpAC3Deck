@@ -922,8 +922,16 @@ function makeSteamField(button, params, setParam) {
   }
   const options = [{ value: "", label: "Seç…" }, ...sources.steamGames.map((g) => ({ value: g.appid, label: g.name }))];
   return makeSelectField("Steam Oyunu", options, params.appid || "", (val) => {
+    const previousGame = sources.steamGames.find((g) => g.appid === button.params.appid);
     setParam("appid", val);
     if (val) {
+      // etiket bos, varsayilan ya da onceki oyunun adiysa yeni oyunun adini yaz;
+      // kullanicinin elle verdigi ozel etikete dokunma
+      const game = sources.steamGames.find((g) => g.appid === val);
+      const label = (button.label || "").trim();
+      const isAutoLabel =
+        !label || label === ACTION_DEFS.steam_launch.label || (previousGame && label === previousGame.name);
+      if (game && isAutoLabel) button.label = game.name;
       button.icon = `/api/icon/steam/${val}`;
       renderGrid();
       renderInspector();

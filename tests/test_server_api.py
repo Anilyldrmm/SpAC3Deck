@@ -377,3 +377,49 @@ def test_deck_host_origin_is_allowlisted(tmp_path):
         headers={"Origin": "http://desktop-spac3.local:8765"},
     )
     assert response.status_code == 200
+
+
+def test_steam_icon_uses_local_library_cache_before_network(tmp_path, monkeypatch):
+    import macrodeck.server as server_module
+    local = tmp_path / "library_header.jpg"
+    local.write_bytes(b"\xff\xd8local")
+    monkeypatch.setattr(server_module, "find_local_steam_image", lambda appid: local)
+
+    def _no_network(*_args, **_kwargs):
+        raise AssertionError("yerel gorsel varken ag cagrisi yapilmamali")
+
+    monkeypatch.setattr(server_module.urllib.request, "urlopen", _no_network)
+    client = build_client(tmp_path)
+
+    response = client.get("/api/icon/steam/1867240", params={"token": "1234"})
+
+    assert response.status_code == 200
+    assert response.content == b"\xff\xd8local"
+
+
+def test_steam_icon_falls_back_to_store_api_header_when_cdn_404(tmp_path, monkeypatch):
+    import io
+    import json
+    import urllib.error
+    import macrodeck.server as server_module
+
+    monkeypatch.setattr(server_module, "find_local_steam_image", lambda appid: None)
+    header_url = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/4108000/abc/header.jpg"
+
+    def _urlopen(url, timeout=None):
+        if "cdn.cloudflare.steamstatic.com" in url:
+            raise urllib.error.HTTPError(url, 404, "not found", {}, None)
+        if "appdetails" in url:
+            body = {"4108000": {"success": True, "data": {"header_image": header_url}}}
+            return io.BytesIO(json.dumps(body).encode("utf-8"))
+        if url == header_url:
+            return io.BytesIO(b"\xff\xd8store")
+        raise AssertionError(url)
+
+    monkeypatch.setattr(server_module.urllib.request, "urlopen", _urlopen)
+    client = build_client(tmp_path)
+
+    response = client.get("/api/icon/steam/4108000", params={"token": "1234"})
+
+    assert response.status_code == 200
+    assert response.content == b"\xff\xd8store"

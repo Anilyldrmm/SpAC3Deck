@@ -31,6 +31,40 @@ def find_steam_path() -> Path | None:
         return None
 
 
+# tercih sirasi: yatay kapak (buton icin en uygun) -> dikey kapak -> hero.
+# Yeni oyunlarda dosyalar hash'li alt klasorlerde ve dil soneki alabiliyor
+# (library_capsule_turkish.jpg), bu yuzden onek eslemesi yapiyoruz.
+_STEAM_IMAGE_PREFIXES = (
+    "header",
+    "library_header",
+    "library_600x900",
+    "library_capsule",
+    "library_hero",
+)
+
+
+def pick_cached_steam_image(app_dir: Path) -> Path | None:
+    """Steam'in yerel kutuphane onbelleginden (appcache/librarycache/<appid>)
+    buton icin en uygun gorseli secer; yoksa None."""
+    if not app_dir.is_dir():
+        return None
+    images = sorted(p for p in app_dir.rglob("*.jpg") if p.is_file())
+    for prefix in _STEAM_IMAGE_PREFIXES:
+        for image in images:
+            stem = image.stem.lower()
+            # library_hero_blur bulanik arka plan, buton gorseli degil
+            if (stem == prefix or stem.startswith(prefix + "_")) and "blur" not in stem:
+                return image
+    return None
+
+
+def find_local_steam_image(appid: str) -> Path | None:
+    steam_path = find_steam_path()
+    if steam_path is None:
+        return None
+    return pick_cached_steam_image(steam_path / "appcache" / "librarycache" / appid)
+
+
 def _steamapps_dirs(steam_path: Path) -> list[Path]:
     dirs = [steam_path / "steamapps"]
     library_vdf = steam_path / "steamapps" / "libraryfolders.vdf"
