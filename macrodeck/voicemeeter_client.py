@@ -49,6 +49,9 @@ class VoicemeeterClient:
         self._backend.set_route(strip_index, bus, new_state)
         return new_state
 
+    def get_route_state(self, strip_index: int, bus: str) -> bool:
+        return self._backend.get_route(strip_index, bus)
+
     def get_mute_state(self, strip_index: int) -> bool:
         return self._backend.get_mute(strip_index)
 

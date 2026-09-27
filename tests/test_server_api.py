@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 from macrodeck.config import Button, Page, DeckConfig, save_config
-from macrodeck.server import create_app, compute_strip_indices, compute_bus_indices, configure_runtime
+from macrodeck.server import create_app, compute_strip_indices, compute_bus_indices, compute_route_pairs, configure_runtime
 
 
 def build_client(tmp_path, pin="1234", lan_ip=None, port=8765):
@@ -235,6 +235,18 @@ def test_compute_bus_indices_dedupes_and_sorts():
         ]),
     ])
     assert compute_bus_indices(config) == [0, 2]
+
+
+def test_compute_route_pairs_dedupes_and_sorts():
+    config = DeckConfig(pages=[
+        Page(name="A", buttons=[
+            Button(id="1", label="a", action="voicemeeter_route", params={"strip_index": 2, "bus": "B1"}),
+            Button(id="2", label="b", action="voicemeeter_route", params={"strip_index": 0, "bus": "A1"}),
+            Button(id="3", label="c", action="voicemeeter_route", params={"strip_index": 2, "bus": "B1"}),
+            Button(id="4", label="d", action="voicemeeter_mute", params={"strip_index": 5}),
+        ]),
+    ])
+    assert compute_route_pairs(config) == [(0, "A1"), (2, "B1")]
 
 
 def test_get_sounds_empty_when_no_uploads(tmp_path):

@@ -61,6 +61,16 @@ def compute_bus_indices(config: DeckConfig) -> list[int]:
     return sorted(bus_indices)
 
 
+def compute_route_pairs(config: DeckConfig) -> list[tuple[int, str]]:
+    """Config'deki yonlendirme butonlarindan poll edilecek (strip, bus) ciftlerini cikarir."""
+    pairs = set()
+    for page in config.pages:
+        for button in page.buttons:
+            if button.action == "voicemeeter_route" and button.params.get("bus"):
+                pairs.add((button.params.get("strip_index", 0), button.params["bus"]))
+    return sorted(pairs)
+
+
 def _download(url: str) -> bytes:
     with urllib.request.urlopen(url, timeout=5) as resp:
         return resp.read()
@@ -211,6 +221,7 @@ def create_app(
         # yeni config'deki strip/bus'lar restart beklemeden poll edilsin
         app.state.voicemeeter_strip_indices = compute_strip_indices(config)
         app.state.voicemeeter_bus_indices = compute_bus_indices(config)
+        app.state.voicemeeter_route_pairs = compute_route_pairs(config)
         # media_keys.enabled degisikligi restart beklemeden hook'lara yansisin
         listener = getattr(app.state, "media_key_listener", None)
         if listener is not None:
@@ -232,6 +243,7 @@ def create_app(
         config = load_config(app.state.config_path)
         app.state.voicemeeter_strip_indices = compute_strip_indices(config)
         app.state.voicemeeter_bus_indices = compute_bus_indices(config)
+        app.state.voicemeeter_route_pairs = compute_route_pairs(config)
         await app.state.manager.broadcast({"type": "reload"})
         return {"status": "ok"}
 
@@ -451,6 +463,7 @@ def create_app(
     app.state.voicemeeter_kind = "banana"  # configure_runtime doldurur
     app.state.voicemeeter_strip_indices: list[int] = []
     app.state.voicemeeter_bus_indices: list[int] = []
+    app.state.voicemeeter_route_pairs: list[tuple[int, str]] = []
     app.state.volume_osd = None  # configure_runtime doldurur (main.py verirse)
 
     RECONNECT_INTERVAL = 5.0
@@ -490,6 +503,8 @@ def create_app(
             for bus_index in app.state.voicemeeter_bus_indices:
                 new_state[f"bus{bus_index}_mute"] = client.get_bus_mute_state(bus_index)
                 new_state[f"bus{bus_index}_gain"] = client.get_bus_gain_state(bus_index)
+            for strip_index, bus in app.state.voicemeeter_route_pairs:
+                new_state[f"strip{strip_index}_route_{bus}"] = client.get_route_state(strip_index, bus)
             diff = compute_diff(app.state.last_voicemeeter_state, new_state)
             if diff:
                 app.state.last_voicemeeter_state.update(diff)
@@ -636,6 +651,7 @@ def configure_runtime(
     current_config = load_config(app.state.config_path)
     app.state.voicemeeter_strip_indices = compute_strip_indices(current_config)
     app.state.voicemeeter_bus_indices = compute_bus_indices(current_config)
+    app.state.voicemeeter_route_pairs = compute_route_pairs(current_config)
 
     app.state.volume_osd = osd
 

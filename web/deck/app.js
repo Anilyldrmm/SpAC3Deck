@@ -11,6 +11,7 @@ const SLIDER_THROTTLE_MS = 60;
 const STATE_BADGE_TEXT = {
   mute: { on: "SESSİZ", off: "AÇIK" },
   "bus-mute": { on: "SESSİZ", off: "AÇIK" },
+  route: { on: "AÇIK", off: "KAPALI" },
   screenshare: { on: "AÇIK", off: "KAPALI" },
   "stream-sound": { on: "AÇIK", off: "KAPALI" },
   camera: { on: "AÇIK", off: "KAPALI" },
@@ -303,6 +304,7 @@ function renderPage(index) {
     if (VOICEMEETER_ACTIONS.includes(button.action)) {
       el.dataset.stripIndex = String(stripIndexOf(button));
       el.dataset.kind = button.action === "voicemeeter_mute" ? "mute" : button.action === "voicemeeter_gain" ? "gain-control" : "route";
+      if (el.dataset.kind === "route") el.dataset.routeBus = String((button.params || {}).bus || "");
     } else if (VOICEMEETER_BUS_ACTIONS.includes(button.action)) {
       el.dataset.busIndex = String(busIndexOf(button));
       el.dataset.kind = button.action === "voicemeeter_bus_mute" ? "bus-mute" : "bus-gain-control";
@@ -473,6 +475,16 @@ function applyStateDiff(diff) {
     if (muteMatch) {
       const el = document.querySelector(`[data-strip-index="${muteMatch[1]}"][data-kind="mute"]`);
       if (el) el.classList.toggle("active", Boolean(value));
+      return;
+    }
+
+    const routeMatch = key.match(/^strip(\d+)_route_(.+)$/);
+    if (routeMatch) {
+      document
+        .querySelectorAll(`[data-strip-index="${routeMatch[1]}"][data-kind="route"]`)
+        .forEach((el) => {
+          if (el.dataset.routeBus === routeMatch[2]) el.classList.toggle("active", Boolean(value));
+        });
       return;
     }
 
