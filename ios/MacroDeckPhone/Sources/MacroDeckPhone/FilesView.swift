@@ -1,3 +1,4 @@
+import Photos
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -145,6 +146,26 @@ struct FilesView: View {
         return false
     }
 
+    private static func mediaKind(of url: URL) -> PHAssetResourceType? {
+        guard let type = UTType(filenameExtension: url.pathExtension) else { return nil }
+        if type.conforms(to: .image) { return .photo }
+        if type.conforms(to: .movie) { return .video }
+        return nil
+    }
+
+    /// Fotoğraf ve videolar paylaşım sayfası yerine doğrudan galeriye (yalnızca ekleme izniyle) kaydedilir.
+    private func saveToGallery(_ url: URL, _ kind: PHAssetResourceType) async -> Bool {
+        guard await PHPhotoLibrary.requestAuthorization(for: .addOnly) != .denied else { return false }
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetCreationRequest.forAsset().addResource(with: kind, fileURL: url, options: nil)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     private func download(_ file: RemoteFile) async {
         guard let remote = deck.restURL("/api/files/" + (file.name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? file.name)) else { return }
         downloading = file.name
@@ -156,7 +177,12 @@ struct FilesView: View {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let target = folder.appendingPathComponent(file.name)
             try FileManager.default.moveItem(at: temp, to: target)
-            shared = SharedFile(url: target)
+            if let kind = Self.mediaKind(of: target) {
+                if await saveToGallery(target, kind) { message = "Galeriye kaydedildi: \(file.name)" }
+                else { message = "Galeriye kaydedilemedi. Ayarlar › MacroDeck › Fotoğraflar iznini kontrol et."; shared = SharedFile(url: target) }
+            } else {
+                shared = SharedFile(url: target)
+            }
         } catch {
             message = "İndirilemedi: bağlantı kesildi."
         }

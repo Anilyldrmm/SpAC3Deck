@@ -18,6 +18,8 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>PC'den aldığın fotoğraf ve videolar galeriye kaydedilir.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Fotoğraf ve videoları PC'ye göndermek için gerekli.</string>
 </dict>
