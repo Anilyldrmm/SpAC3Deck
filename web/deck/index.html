@@ -31,6 +31,17 @@
     <main id="button-grid"></main>
   </div>
   <button id="rotate-toggle" hidden aria-label="Ekranı döndür">⟳</button>
+  <button id="file-toggle" hidden aria-label="Dosya">DOSYA</button>
+  <div id="files" hidden>
+    <label>Telefondan PC'ye</label>
+    <input id="file-input" type="file" multiple hidden />
+    <button id="file-pick">Dosya seç ve gönder</button>
+    <div id="file-status"></div>
+    <label id="file-dir">PC'den telefona</label>
+    <div id="file-list"></div>
+    <button id="file-refresh">Yenile</button>
+    <button id="file-close">Kapat</button>
+  </div>
   <button id="clip-toggle" hidden aria-label="Pano">PANO</button>
   <div id="clip" hidden>
     <label for="clip-pc">PC panosu</label>

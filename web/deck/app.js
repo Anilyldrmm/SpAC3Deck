@@ -50,6 +50,7 @@ const connBanner = document.getElementById("conn-banner");
 const rotateToggle = document.getElementById("rotate-toggle");
 const padToggle = document.getElementById("pad-toggle");
 const clipToggle = document.getElementById("clip-toggle");
+const fileToggle = document.getElementById("file-toggle");
 
 let config = null;
 let currentPage = 0;
@@ -208,6 +209,7 @@ async function connectWithPin(pin) {
   rotateToggle.hidden = false;
   padToggle.hidden = false;
   clipToggle.hidden = false;
+  fileToggle.hidden = false;
   setConnected(false);
   try {
     renderTabs();
@@ -717,6 +719,85 @@ clipSendBtn.addEventListener("click", () => {
 
 clipToggle.addEventListener("click", () => { clipEl.hidden = false; });
 document.getElementById("clip-close").addEventListener("click", () => { clipEl.hidden = true; });
+
+// --- Dosya: telefondan PC'ye yukleme (ilerlemeli), PC'den telefona indirme ---
+const filesEl = document.getElementById("files");
+const fileInput = document.getElementById("file-input");
+const fileStatus = document.getElementById("file-status");
+const fileList = document.getElementById("file-list");
+const fileDirLabel = document.getElementById("file-dir");
+
+function formatSize(bytes) {
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function uploadOne(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/files/upload?token=${encodeURIComponent(currentPin)}`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onload = () => (xhr.status === 200 ? resolve(JSON.parse(xhr.responseText)) : reject(new Error(`hata ${xhr.status}`)));
+    xhr.onerror = () => reject(new Error("bağlantı hatası"));
+    const form = new FormData();
+    form.append("file", file);
+    xhr.send(form);
+  });
+}
+
+fileInput.addEventListener("change", async () => {
+  const files = Array.from(fileInput.files);
+  fileInput.value = "";
+  const lines = [];
+  for (const file of files) {
+    const index = lines.push(`${file.name}: 0%`) - 1;
+    const render = () => { fileStatus.textContent = lines.join("\n"); };
+    render();
+    try {
+      const result = await uploadOne(file, (pct) => { lines[index] = `${file.name}: ${pct}%`; render(); });
+      lines[index] = `${file.name}: gönderildi (PC: ${result.dir})`;
+    } catch (err) {
+      lines[index] = `${file.name}: başarısız (${err.message})`;
+    }
+    render();
+  }
+});
+
+async function loadFileList() {
+  fileList.innerHTML = "";
+  let data;
+  try {
+    const response = await fetch(`/api/files?token=${encodeURIComponent(currentPin)}`);
+    if (!response.ok) throw new Error(String(response.status));
+    data = await response.json();
+  } catch (err) {
+    fileList.innerHTML = "<p>Liste alınamadı.</p>";
+    return;
+  }
+  fileDirLabel.textContent = "PC'den telefona";
+  if (!data.files.length) {
+    const hint = document.createElement("p");
+    hint.textContent = `Telefona göndermek istediğin dosyaları PC'de şu klasöre koy: ${data.dir}`;
+    fileList.appendChild(hint);
+    return;
+  }
+  data.files.forEach((f) => {
+    const link = document.createElement("a");
+    link.href = `/api/files/${encodeURIComponent(f.name)}?token=${encodeURIComponent(currentPin)}`;
+    link.download = f.name;
+    const name = document.createElement("span");
+    name.textContent = f.name;
+    const size = document.createElement("small");
+    size.textContent = formatSize(f.size);
+    link.append(name, size);
+    fileList.appendChild(link);
+  });
+}
+
+document.getElementById("file-pick").addEventListener("click", () => fileInput.click());
+document.getElementById("file-refresh").addEventListener("click", loadFileList);
+fileToggle.addEventListener("click", () => { filesEl.hidden = false; loadFileList(); });
+document.getElementById("file-close").addEventListener("click", () => { filesEl.hidden = true; });
 
 pinSubmit.addEventListener("click", () => connectWithPin(pinInput.value.trim()));
 pinInput.addEventListener("keydown", (event) => {

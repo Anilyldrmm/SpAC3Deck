@@ -73,3 +73,33 @@ def test_grab_jpeg_real_screen_is_jpeg():
     from macrodeck.screen import grab_jpeg
     data = grab_jpeg()
     assert data[:2] == b"\xff\xd8" and len(data) < 400_000
+
+
+def test_files_upload_list_download_and_traversal(tmp_path):
+    client, _ = build_client(tmp_path)
+    client.app.state.files_dir = tmp_path / "dosyalar"
+    q = "?token=1234"
+
+    r = client.post("/api/files/upload" + q, files={"file": ("..\\..\\evil:x.txt", b"merhaba")})
+    assert r.status_code == 200
+    r2 = client.post("/api/files/upload" + q, files={"file": ("evil:x.txt", b"ikinci")})
+    inbox = tmp_path / "dosyalar" / "Gelen"
+    assert sorted(p.name for p in inbox.iterdir()) == ["evil_x (1).txt", "evil_x.txt"]
+    assert (inbox / "evil_x.txt").read_bytes() == b"merhaba"
+    assert client.post("/api/files/upload?token=0000", files={"file": ("a.txt", b"x")}).status_code == 403
+
+    outbox = tmp_path / "dosyalar" / "Giden"
+    outbox.mkdir(parents=True, exist_ok=True)
+    (outbox / "rapor.pdf").write_bytes(b"pdfdata")
+    assert client.get("/api/files" + q).json()["files"] == [{"name": "rapor.pdf", "size": 7}]
+    assert client.get("/api/files/rapor.pdf" + q).content == b"pdfdata"
+    (tmp_path / "dosyalar" / "gizli.txt").write_text("x")
+    assert client.get("/api/files/..%2Fgizli.txt" + q).status_code == 404
+    assert client.get("/api/files/rapor.pdf?token=0000").status_code == 403
+
+
+def test_safe_name_reserved_and_empty():
+    from macrodeck.files import safe_name
+    assert safe_name("CON.txt") == "_CON.txt"
+    assert safe_name("") == "dosya"
+    assert safe_name("a/b\\c.png") == "c.png"

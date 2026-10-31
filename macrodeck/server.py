@@ -10,6 +10,7 @@ import urllib.request
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
@@ -22,6 +23,7 @@ from .config import DeckConfig, load_config, save_config
 from .discord_bridge import DiscordBridge, load_or_create_bridge_token
 from .paths import web_root as get_web_root
 from . import os_bridge, remote_input, screen
+from .files import safe_name, unique_path
 from .qr import generate_deck_url, generate_qr_png
 from .security import AttemptLimiter, build_allowed_origins, origin_allowed
 from .sources import find_local_steam_image, list_monitors, list_steam_games
@@ -148,6 +150,8 @@ def create_app(
     app.state.discord_bridge = DiscordBridge()
     app.state.clipboard = os_bridge  # clipboard_seq/get_clipboard_text/set_clipboard_text; testlerde sahte
     app.state.clipboard_last = ""
+    # Gelen: telefondan yuklenenler, Giden: PC'den telefona sunulacaklar
+    app.state.files_dir = Path.home() / "Downloads" / "MacroDeck"
     app.state.screen_grab = screen.grab_jpeg  # testlerde sahte
     app.state.input_handler = remote_input.handle  # testlerde sahte ile degistirilir
     app.state.bridge_token = load_or_create_bridge_token(
@@ -412,6 +416,48 @@ def create_app(
             media_type=media_type,
             headers={"Cache-Control": "public, max-age=604800"},
         )
+
+    _MAX_FILE_BYTES = 2 * 1024**3
+
+    @app.post("/api/files/upload")
+    async def upload_file(request: Request, file: UploadFile, token: str | None = None):
+        _require_auth(request, token)
+        inbox = app.state.files_dir / "Gelen"
+        inbox.mkdir(parents=True, exist_ok=True)
+        dest = unique_path(inbox, safe_name(file.filename))
+        size = 0
+        try:
+            with dest.open("wb") as out:
+                while chunk := await file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > _MAX_FILE_BYTES:
+                        raise HTTPException(status_code=413, detail="dosya cok buyuk (max 2GB)")
+                    out.write(chunk)
+        except BaseException:
+            dest.unlink(missing_ok=True)  # yarim kalan dosya birakma
+            raise
+        return {"file": dest.name, "size": size, "dir": str(inbox)}
+
+    def _outbox() -> Path:
+        outbox = app.state.files_dir / "Giden"
+        outbox.mkdir(parents=True, exist_ok=True)
+        return outbox
+
+    @app.get("/api/files")
+    def list_files(request: Request, token: str | None = None):
+        _require_auth(request, token)
+        outbox = _outbox()
+        files = sorted((p for p in outbox.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
+        return {"dir": str(outbox), "files": [{"name": p.name, "size": p.stat().st_size} for p in files[:200]]}
+
+    @app.get("/api/files/{name}")
+    def download_file(name: str, request: Request, token: str | None = None):
+        _require_auth(request, token)
+        outbox = _outbox().resolve()
+        path = (outbox / name).resolve()
+        if path.parent != outbox or not path.is_file():
+            raise HTTPException(status_code=404, detail="not found")
+        return FileResponse(path, filename=path.name)
 
     _SOUND_EXTENSIONS = {"audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav"}
     _MAX_SOUND_BYTES = 10 * 1024 * 1024
