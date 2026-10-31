@@ -21,6 +21,7 @@ from . import backups as backups_module
 from .config import DeckConfig, load_config, save_config
 from .discord_bridge import DiscordBridge, load_or_create_bridge_token
 from .paths import web_root as get_web_root
+from . import remote_input
 from .qr import generate_deck_url, generate_qr_png
 from .security import AttemptLimiter, build_allowed_origins, origin_allowed
 from .sources import find_local_steam_image, list_monitors, list_steam_games
@@ -143,6 +144,7 @@ def create_app(
         ["localhost", "127.0.0.1", lan_ip, deck_host], port
     )
     app.state.discord_bridge = DiscordBridge()
+    app.state.input_handler = remote_input.handle  # testlerde sahte ile degistirilir
     app.state.bridge_token = load_or_create_bridge_token(
         config_path.parent / "bridge_token.txt"
     )
@@ -534,6 +536,13 @@ def create_app(
         try:
             while True:
                 msg = await websocket.receive_json()
+
+                if isinstance(msg, dict) and msg.get("type") == "input":
+                    try:
+                        app.state.input_handler(msg)
+                    except Exception as e:
+                        logger.debug(f"Bad input message from {client_ip}: {e}")
+                    continue
 
                 # Validate message shape
                 if not isinstance(msg, dict) or "page" not in msg or "button_id" not in msg:

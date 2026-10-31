@@ -48,6 +48,7 @@ const tabsEl = document.getElementById("page-tabs");
 const gridEl = document.getElementById("button-grid");
 const connBanner = document.getElementById("conn-banner");
 const rotateToggle = document.getElementById("rotate-toggle");
+const padToggle = document.getElementById("pad-toggle");
 
 let config = null;
 let currentPage = 0;
@@ -204,6 +205,7 @@ async function connectWithPin(pin) {
   pinGate.hidden = true;
   deckEl.hidden = false;
   rotateToggle.hidden = false;
+  padToggle.hidden = false;
   setConnected(false);
   try {
     renderTabs();
@@ -529,6 +531,113 @@ function applyStateDiff(diff) {
     }
   });
 }
+
+// --- Iz pedi: dokunmatik hareketleri PC fare/klavyesine cevirir ---
+const padEl = document.getElementById("pad");
+const padSurface = document.getElementById("pad-surface");
+const padInput = document.getElementById("pad-input");
+const TAP_MS = 250;
+const TAP_SLOP_PX = 8;
+const SCROLL_PX_PER_STEP = 24;
+
+function sendInput(payload) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type: "input", ...payload }));
+}
+
+let moveDx = 0;
+let moveDy = 0;
+let moveTimer = null;
+function queueMove(dx, dy) {
+  moveDx += dx;
+  moveDy += dy;
+  if (moveTimer) return;
+  moveTimer = setTimeout(() => {
+    moveTimer = null;
+    const dxi = Math.trunc(moveDx);
+    const dyi = Math.trunc(moveDy);
+    moveDx -= dxi;
+    moveDy -= dyi;
+    if (dxi || dyi) sendInput({ kind: "move", dx: dxi, dy: dyi });
+  }, 16);
+}
+
+let padStart = 0;
+let padMoved = 0;
+let padMaxTouches = 0;
+let padLast = null;
+let scrollAcc = 0;
+// shortcut: surukle-birak (tik basili tutma) yok, gerekirse cift-dokun-surukle eklenir
+
+function padCentroid(touches) {
+  let x = 0;
+  let y = 0;
+  for (const t of touches) { x += t.clientX; y += t.clientY; }
+  return { x: x / touches.length, y: y / touches.length };
+}
+
+padSurface.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    padStart = Date.now();
+    padMoved = 0;
+    padMaxTouches = 1;
+    scrollAcc = 0;
+  }
+  padMaxTouches = Math.max(padMaxTouches, e.touches.length);
+  padLast = padCentroid(e.touches);
+}, { passive: false });
+
+padSurface.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+  const now = padCentroid(e.touches);
+  const dx = now.x - padLast.x;
+  const dy = now.y - padLast.y;
+  padLast = now;
+  padMoved += Math.abs(dx) + Math.abs(dy);
+  if (e.touches.length >= 2) {
+    scrollAcc += dy;
+    const steps = Math.trunc(scrollAcc / SCROLL_PX_PER_STEP);
+    if (steps) {
+      scrollAcc -= steps * SCROLL_PX_PER_STEP;
+      sendInput({ kind: "scroll", dy: steps }); // parmak asagi = icerik yukari (dogal kaydirma)
+    }
+  } else {
+    queueMove(dx * 1.6, dy * 1.6);
+  }
+}, { passive: false });
+
+padSurface.addEventListener("touchend", (e) => {
+  e.preventDefault();
+  if (e.touches.length > 0) return;
+  if (Date.now() - padStart < TAP_MS && padMoved < TAP_SLOP_PX) {
+    sendInput({ kind: "click", button: padMaxTouches >= 2 ? "right" : "left" });
+  }
+  padLast = null;
+}, { passive: false });
+
+document.querySelectorAll("#pad-clicks [data-click]").forEach((btn) => {
+  btn.addEventListener("click", () => sendInput({ kind: "click", button: btn.dataset.click }));
+});
+document.querySelectorAll("#pad-keys [data-key]").forEach((btn) => {
+  // butona basinca input'tan odak gitmesin, klavye kapanmasin
+  btn.addEventListener("pointerdown", (e) => e.preventDefault());
+  btn.addEventListener("click", () => sendInput({ kind: "key", key: btn.dataset.key }));
+});
+
+padInput.addEventListener("input", () => {
+  if (padInput.value) sendInput({ kind: "text", text: padInput.value });
+  padInput.value = "";
+});
+padInput.addEventListener("keydown", (e) => {
+  if (e.key === "Backspace" || e.key === "Enter") {
+    e.preventDefault();
+    sendInput({ kind: "key", key: e.key.toLowerCase() });
+  }
+});
+
+padToggle.addEventListener("click", () => { padEl.hidden = false; });
+document.getElementById("pad-close").addEventListener("click", () => { padEl.hidden = true; });
 
 pinSubmit.addEventListener("click", () => connectWithPin(pinInput.value.trim()));
 pinInput.addEventListener("keydown", (event) => {

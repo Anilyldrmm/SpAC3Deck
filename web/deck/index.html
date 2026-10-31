@@ -31,6 +31,22 @@
     <main id="button-grid"></main>
   </div>
   <button id="rotate-toggle" hidden aria-label="Ekranı döndür">⟳</button>
+  <button id="pad-toggle" hidden aria-label="İz pedi">İZ PEDİ</button>
+  <div id="pad" hidden>
+    <div id="pad-surface"><span>Tek parmak: imleç &middot; dokun: tık<br>İki parmak: kaydır &middot; iki parmakla dokun: sağ tık</span></div>
+    <div id="pad-keys">
+      <input id="pad-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Yaz…" />
+      <button data-key="backspace">Sil</button>
+      <button data-key="enter">Enter</button>
+      <button data-key="esc">Esc</button>
+      <button data-key="tab">Tab</button>
+    </div>
+    <div id="pad-clicks">
+      <button data-click="left">Sol tık</button>
+      <button data-click="right">Sağ tık</button>
+      <button id="pad-close">Kapat</button>
+    </div>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>
