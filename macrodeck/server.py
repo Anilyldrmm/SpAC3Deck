@@ -26,7 +26,7 @@ from . import os_bridge, remote_input, screen
 from .files import safe_name, unique_path
 from .qr import generate_deck_url, generate_qr_png
 from .security import AttemptLimiter, build_allowed_origins, origin_allowed
-from .sources import find_local_steam_image, list_monitors, list_steam_games
+from .sources import find_local_steam_image, list_monitors, list_start_menu_apps, list_steam_games
 from .state import generate_pin, compute_diff
 from .actions.context import ActionContext
 from .actions.registry import dispatch
@@ -150,7 +150,8 @@ def create_app(
     app.state.clipboard = os_bridge  # clipboard_seq/get_clipboard_text/set_clipboard_text; testlerde sahte
     app.state.clipboard_last = ""
     # Gelen: telefondan yuklenenler, Giden: PC'den telefona sunulacaklar
-    app.state.files_dir = Path.home() / "Downloads" / "MacroDeck"
+    # Indirilenler klasorune dokunmaz: dosyalar MacroDeck veri klasorunde, pencereden yonetilir
+    app.state.files_dir = config_path.parent / "files"
     app.state.screen_grab = screen.grab_jpeg  # testlerde sahte
     app.state.monitors = screen.monitors
     app.state.input_handler = remote_input.handle  # testlerde sahte ile degistirilir
@@ -344,6 +345,11 @@ def create_app(
         _require_auth(request, token)
         return list_monitors()
 
+    @app.get("/api/sources/apps")
+    def get_start_menu_apps(request: Request, token: str | None = None):
+        _require_auth(request, token)
+        return list_start_menu_apps()
+
     @app.get("/api/sources/steam-games")
     def get_steam_games(request: Request, token: str | None = None):
         _require_auth(request, token)
@@ -419,14 +425,12 @@ def create_app(
 
     _MAX_FILE_BYTES = 2 * 1024**3
 
-    @app.post("/api/files/upload")
-    async def upload_file(request: Request, name: str = "dosya", token: str | None = None):
-        # ham govde (multipart degil): PIN ve boyut, govde okunmadan ONCE kontrol edilir
-        _require_auth(request, token)
+    async def _save_stream(request: Request, folder: Path, name: str) -> dict:
+        # ham govde (multipart degil): boyut, govde okunmadan ONCE kontrol edilir
         declared = request.headers.get("content-length")
         if declared is not None and declared.isdigit() and int(declared) > _MAX_FILE_BYTES:
             raise HTTPException(status_code=413, detail="dosya cok buyuk (max 2GB)")
-        inbox = app.state.files_dir / "Gelen"
+        inbox = folder
         inbox.mkdir(parents=True, exist_ok=True)
         dest = unique_path(inbox, safe_name(name))
         size = 0
@@ -441,6 +445,51 @@ def create_app(
             dest.unlink(missing_ok=True)  # yarim kalan dosya birakma
             raise
         return {"file": dest.name, "size": size, "dir": str(inbox)}
+
+    @app.post("/api/files/upload")
+    async def upload_file(request: Request, name: str = "dosya", token: str | None = None):
+        _require_auth(request, token)
+        return await _save_stream(request, app.state.files_dir / "Gelen", name)
+
+    @app.post("/api/outbox/upload")
+    async def upload_outbox(request: Request, name: str = "dosya", token: str | None = None):
+        # PC penceresine surukle-birak: telefonda "PC'den al" listesinde gorunur
+        _require_auth(request, token)
+        return await _save_stream(request, app.state.files_dir / "Giden", name)
+
+    def _folder_file(folder: Path, name: str) -> Path:
+        folder.mkdir(parents=True, exist_ok=True)
+        base = folder.resolve()
+        path = (base / name).resolve()
+        if path.parent != base or not path.is_file():
+            raise HTTPException(status_code=404, detail="not found")
+        return path
+
+    @app.get("/api/inbox")
+    def list_inbox(request: Request, token: str | None = None):
+        _require_auth(request, token)
+        inbox = app.state.files_dir / "Gelen"
+        inbox.mkdir(parents=True, exist_ok=True)
+        files = sorted((p for p in inbox.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
+        return {"files": [{"name": p.name, "size": p.stat().st_size} for p in files[:200]]}
+
+    @app.get("/api/inbox/{name}")
+    def download_inbox(name: str, request: Request, token: str | None = None):
+        _require_auth(request, token)
+        path = _folder_file(app.state.files_dir / "Gelen", name)
+        return FileResponse(path, filename=path.name)
+
+    @app.delete("/api/inbox/{name}")
+    def delete_inbox(name: str, request: Request, token: str | None = None):
+        _require_auth(request, token)
+        _folder_file(app.state.files_dir / "Gelen", name).unlink()
+        return {"ok": True}
+
+    @app.delete("/api/outbox/{name}")
+    def delete_outbox(name: str, request: Request, token: str | None = None):
+        _require_auth(request, token)
+        _folder_file(app.state.files_dir / "Giden", name).unlink()
+        return {"ok": True}
 
     def _outbox() -> Path:
         outbox = app.state.files_dir / "Giden"

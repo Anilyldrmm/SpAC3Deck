@@ -153,3 +153,27 @@ def test_sources_monitors_not_shadowed(tmp_path):
     # /api/monitors rotasi, sources.list_monitors'u golgelemisti -> 500
     client, _ = build_client(tmp_path)
     assert client.get("/api/sources/monitors?token=1234").status_code == 200
+
+
+def test_start_menu_apps_endpoint(tmp_path):
+    client, _ = build_client(tmp_path)
+    r = client.get("/api/sources/apps?token=1234")
+    assert r.status_code == 200
+    apps = r.json()
+    assert apps and all(a["path"].lower().endswith(".lnk") for a in apps)
+    assert client.get("/api/sources/apps?token=0000").status_code == 403
+
+
+def test_outbox_drop_inbox_list_delete(tmp_path):
+    client, _ = build_client(tmp_path)
+    client.app.state.files_dir = tmp_path / "dosyalar"
+    q = "?token=1234"
+    assert client.post("/api/outbox/upload?token=1234&name=a.txt", content=b"pc").status_code == 200
+    assert [f["name"] for f in client.get("/api/files" + q).json()["files"]] == ["a.txt"]  # telefon listesi
+    assert client.post("/api/files/upload?token=1234&name=b.txt", content=b"tel").status_code == 200
+    assert [f["name"] for f in client.get("/api/inbox" + q).json()["files"]] == ["b.txt"]
+    assert client.get("/api/inbox/b.txt" + q).content == b"tel"
+    assert client.get("/api/inbox/..%5Ca.txt" + q).status_code == 404
+    assert client.delete("/api/inbox/b.txt" + q).status_code == 200
+    assert client.delete("/api/outbox/a.txt" + q).status_code == 200
+    assert client.delete("/api/outbox/a.txt?token=0000").status_code == 403

@@ -79,7 +79,8 @@ async function loadSources() {
     fetchSourceSafe("/api/sources/steam-games"),
     fetchSourceSafe("/api/sources/sounds"),
   ]);
-  sources = { voicemeeterStrips, voicemeeterBuses, monitors, steamGames, sounds };
+  const apps = await fetchSourceSafe("/api/sources/apps");
+  sources = { voicemeeterStrips, voicemeeterBuses, monitors, steamGames, sounds, apps };
 }
 
 async function loadConfig() {
@@ -935,6 +936,44 @@ function makeMonitorField(params, setParam) {
   );
 }
 
+// Uygulama Aç: Başlat menüsünden seç, ya da dosya gezgini, ya da yolu elle yaz
+function makeAppPicker(button, params, setParam) {
+  const wrap = document.createElement("div");
+  const pathRow = makeTextField("Dosya Yolu", params.path || "", (val) => setParam("path", val));
+  const pathInput = pathRow.querySelector("input");
+  const apply = (name, path) => {
+    pathInput.value = path;
+    setParam("path", path);
+    const label = (button.label || "").trim();
+    if (name && (!label || label === ACTION_DEFS.launch_app.label)) {
+      button.label = name;
+      renderGrid();
+    }
+  };
+  const apps = sources.apps || [];
+  if (apps.length) {
+    const options = [{ value: "", label: "Yüklü uygulamalardan seç…" }, ...apps.map((a, i) => ({ value: i, label: a.name }))];
+    const current = apps.findIndex((a) => a.path === params.path);
+    wrap.appendChild(
+      makeSelectField("Uygulama", options, current >= 0 ? current : "", (val) => {
+        if (val !== "") apply(apps[Number(val)].name, apps[Number(val)].path);
+      })
+    );
+  }
+  wrap.appendChild(pathRow);
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_file) {
+    const browse = document.createElement("button");
+    browse.type = "button";
+    browse.textContent = "Dosya seç…";
+    browse.addEventListener("click", async () => {
+      const picked = await window.pywebview.api.pick_file();
+      if (picked) apply(picked.split("\\").pop().replace(/\.[^.]+$/, ""), picked);
+    });
+    wrap.appendChild(browse);
+  }
+  return wrap;
+}
+
 function makeSteamField(button, params, setParam) {
   if (!sources.steamGames.length) {
     return makeTextField("Steam AppID", params.appid || "", (val) => setParam("appid", val));
@@ -1009,7 +1048,7 @@ function makeActionParamsFieldsFor(button, setParam) {
       container.appendChild(makeTextField("Kanal ID", params.channel_id || "", (val) => setParam("channel_id", val)));
       break;
     case "launch_app":
-      container.appendChild(makeTextField("Dosya Yolu", params.path || "", (val) => setParam("path", val)));
+      container.appendChild(makeAppPicker(button, params, setParam));
       break;
     case "open_url":
       container.appendChild(makeTextField("URL", params.url || "", (val) => setParam("url", val)));
@@ -1087,7 +1126,7 @@ function renderInspector() {
 // --- QR popover ---
 
 function closeOtherPopovers(exceptId) {
-  ["qr-popover", "bridge-popover", "history-popover", "settings-popover"].forEach((id) => {
+  ["qr-popover", "bridge-popover", "history-popover", "settings-popover", "files-popover"].forEach((id) => {
     if (id !== exceptId) document.getElementById(id).hidden = true;
   });
 }
@@ -1541,7 +1580,7 @@ document.addEventListener("click", (event) => {
   // etkilenmez.
   const path = event.composedPath();
 
-  ["qr-popover", "bridge-popover", "history-popover", "settings-popover"].forEach((id) => {
+  ["qr-popover", "bridge-popover", "history-popover", "settings-popover", "files-popover"].forEach((id) => {
     const popover = document.getElementById(id);
     if (popover.hidden) return;
     const toggle = document.getElementById(id.replace("-popover", "-toggle"));
@@ -1571,3 +1610,92 @@ document.getElementById("library-search").addEventListener("input", (event) => {
 renderLibrary();
 loadConfig();
 loadSources();
+
+
+// --- Dosya aktarımı: pencereye sürükle-bırak ---
+
+const fmtSize = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+function fileApi(path, options) {
+  const sep = path.includes("?") ? "&" : "?";
+  return fetch(`${path}${sep}token=${encodeURIComponent(TOKEN)}`, options);
+}
+
+function renderFileList(listId, files, base) {
+  const ul = document.getElementById(listId);
+  const isInbox = listId === "inbox-list";
+  ul.replaceChildren();
+  if (!files.length) {
+    const li = document.createElement("li");
+    li.className = "hint";
+    li.textContent = "Boş";
+    ul.appendChild(li);
+    return;
+  }
+  files.forEach((f) => {
+    const li = document.createElement("li");
+    const name = document.createElement(isInbox ? "a" : "span");
+    name.textContent = `${f.name} · ${fmtSize(f.size)}`;
+    if (isInbox) name.href = `${base}/${encodeURIComponent(f.name)}?token=${encodeURIComponent(TOKEN)}`;
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "×";
+    del.title = "Sil";
+    del.addEventListener("click", async () => {
+      await fileApi(`${isInbox ? "/api/inbox" : "/api/outbox"}/${encodeURIComponent(f.name)}`, { method: "DELETE" });
+      refreshFiles();
+    });
+    li.append(name, del);
+    ul.appendChild(li);
+  });
+}
+
+async function refreshFiles() {
+  try {
+    const [out, inn] = await Promise.all([
+      fileApi("/api/files").then((r) => r.json()),
+      fileApi("/api/inbox").then((r) => r.json()),
+    ]);
+    renderFileList("outbox-list", out.files, "/api/files");
+    renderFileList("inbox-list", inn.files, "/api/inbox");
+  } catch (e) {
+    /* liste yüklenemedi: panel yeniden açılınca tekrar dener */
+  }
+}
+
+async function sendDropped(files) {
+  const text = document.getElementById("drop-text");
+  for (const file of files) {
+    text.textContent = `Gönderiliyor: ${file.name}`;
+    const res = await fileApi(`/api/outbox/upload?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    if (!res.ok) text.textContent = `Gönderilemedi: ${file.name}`;
+  }
+  if (text.textContent.startsWith("Gönderiliyor")) text.textContent = "Dosyaları buraya sürükle";
+  refreshFiles();
+}
+
+document.getElementById("files-toggle").addEventListener("click", () => {
+  const popover = document.getElementById("files-popover");
+  closeOtherPopovers("files-popover");
+  popover.hidden = !popover.hidden;
+  if (!popover.hidden) refreshFiles();
+});
+
+// pencerenin herhangi bir yerine bırakılan dosya telefona gider; panel açılır
+["dragenter", "dragover"].forEach((type) =>
+  window.addEventListener(type, (e) => {
+    if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    document.getElementById("files-popover").hidden = false;
+    document.getElementById("drop-zone").classList.add("over");
+  })
+);
+window.addEventListener("dragleave", (e) => {
+  if (e.relatedTarget === null) document.getElementById("drop-zone").classList.remove("over");
+});
+window.addEventListener("drop", (e) => {
+  if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  document.getElementById("drop-zone").classList.remove("over");
+  sendDropped(Array.from(e.dataTransfer.files));
+});

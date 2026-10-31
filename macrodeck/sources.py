@@ -117,6 +117,29 @@ def list_steam_games() -> list[dict]:
     return sorted(games, key=lambda g: g["name"].lower())
 
 
+_SKIP_APP_WORDS = ("uninstall", "kaldır", "kaldir", "readme", "help", "yardım", "documentation", "license")
+
+
+def list_start_menu_apps() -> list[dict]:
+    """Baslat menusundeki kisayollar (.lnk) - os.startfile kisayolu dogrudan acar, hedef cozmeye gerek yok."""
+    import os
+
+    roots = [
+        Path(os.environ.get("ProgramData", r"C:\ProgramData")) / "Microsoft/Windows/Start Menu/Programs",
+        Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+    ]
+    apps: dict[str, str] = {}
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for lnk in root.rglob("*.lnk"):
+            name = lnk.stem
+            if any(w in name.lower() for w in _SKIP_APP_WORDS):
+                continue
+            apps.setdefault(name.lower(), (name, str(lnk)))
+    return [{"name": n, "path": p} for n, p in sorted(apps.values(), key=lambda x: x[0].lower())]
+
+
 _BROWSER_EXE_NAMES = {
     "chrome": "chrome.exe",
     "edge": "msedge.exe",

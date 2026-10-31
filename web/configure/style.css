@@ -186,7 +186,7 @@ button { font-family: inherit; }
 #bridge-popover h3 .status-dot { position: static; border: none; width: 8px; height: 8px; }
 
 /* --- Popover'lar (QR / Discord Bridge / Geçmiş / Ayarlar) --- */
-#qr-popover, #bridge-popover, #history-popover, #settings-popover {
+#qr-popover, #bridge-popover, #history-popover, #settings-popover, #files-popover {
   position: absolute;
   top: calc(var(--topbar-h) + 6px);
   right: 16px;
@@ -201,7 +201,7 @@ button { font-family: inherit; }
   overflow-y: auto;
 }
 #qr-popover { text-align: center; width: 264px; }
-#qr-popover h3, #bridge-popover h3, #history-popover h3, #settings-popover h3 {
+#qr-popover h3, #bridge-popover h3, #history-popover h3, #settings-popover h3, #files-popover h3 {
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
@@ -496,3 +496,11 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
 #win-controls button svg { width: 12px; height: 12px; }
 #win-controls button:hover { background: rgba(255, 255, 255, 0.08); }
 #win-controls .win-close:hover { background: #e5484d; color: #fff; }
+
+#drop-zone { border: 1.5px dashed var(--hairline-strong); border-radius: 12px; padding: 22px 12px; text-align: center; font-size: 13px; color: var(--ink); margin-bottom: 14px; }
+#drop-zone.over { border-color: #4caf50; background: rgba(76, 175, 80, 0.08); }
+.file-list { list-style: none; margin: 0 0 12px; padding: 0; font-size: 12px; }
+.file-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--hairline); }
+.file-list li span, .file-list li a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); text-decoration: none; }
+.file-list li a:hover { color: #4caf50; }
+.file-list li button { border: 0; background: transparent; color: var(--mute); cursor: pointer; font-size: 16px; line-height: 1; }

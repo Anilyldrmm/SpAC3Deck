@@ -20,12 +20,22 @@
     <button id="history-toggle" class="icon-toggle" title="Geri al / Geçmiş" aria-label="Geri al / Geçmiş"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>
     <button id="settings-toggle" class="icon-toggle" title="Ayarlar" aria-label="Ayarlar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     <button id="qr-toggle" class="icon-toggle" title="Telefon Bağla" aria-label="Telefon Bağla"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></button>
+    <button id="files-toggle" class="icon-toggle" title="Dosya aktarımı" aria-label="Dosya aktarımı"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg></button>
     <div id="win-controls" hidden>
       <button data-win="minimize" title="Küçült" aria-label="Küçült"><svg viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.2"/></svg></button>
       <button data-win="toggle_maximize" title="Büyüt" aria-label="Büyüt"><svg viewBox="0 0 12 12" fill="none"><rect x="2.5" y="2.5" width="7" height="7" stroke="currentColor" stroke-width="1.2"/></svg></button>
       <button data-win="close" title="Kapat" aria-label="Kapat" class="win-close"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.2"/></svg></button>
     </div>
   </header>
+
+  <div id="files-popover" hidden>
+    <h3>Dosya aktarımı</h3>
+    <div id="drop-zone"><span id="drop-text">Dosyaları buraya sürükle</span><br /><span class="hint">Telefonda Dosya sekmesinde “PC'den al” listesinde çıkar</span></div>
+    <p class="settings-label">PC'den telefona</p>
+    <ul id="outbox-list" class="file-list"></ul>
+    <p class="settings-label">Telefondan gelenler</p>
+    <ul id="inbox-list" class="file-list"></ul>
+  </div>
 
   <div id="qr-popover" hidden>
     <h3>Telefon Bağla</h3>

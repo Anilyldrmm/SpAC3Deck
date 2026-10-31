@@ -42,7 +42,7 @@ struct FilesView: View {
                         Text(message).font(.footnote).foregroundStyle(.secondary)
                     }
                 } footer: {
-                    Text("Gönderilenler PC'de İndirilenler › MacroDeck › Gelen klasörüne düşer.")
+                    Text("Gönderilenler PC'deki MacroDeck penceresinde, Dosya aktarımı panelinin 'Telefondan gelenler' listesinde görünür.")
                 }
 
                 Section {
@@ -71,7 +71,7 @@ struct FilesView: View {
                 } header: {
                     Text("PC'den al")
                 } footer: {
-                    Text("PC'de İndirilenler › MacroDeck › Giden klasörüne koyduğun dosyalar burada listelenir.")
+                    Text("PC'de MacroDeck penceresine sürükleyip bıraktığın dosyalar burada listelenir.")
                 }
             }
             .navigationTitle("Dosya")

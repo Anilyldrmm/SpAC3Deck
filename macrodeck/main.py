@@ -106,6 +106,15 @@ class _WindowControls:
     def close(self):
         self._window.destroy()
 
+    def pick_file(self):
+        """Dosya gezgini: secilen yolu dondurur (iptalde None)."""
+        import webview
+
+        picked = self._window.create_file_dialog(
+            webview.OPEN_DIALOG, file_types=("Uygulama (*.exe;*.lnk;*.bat)", "Tüm dosyalar (*.*)")
+        )
+        return picked[0] if picked else None
+
 
 class AppLifecycle:
     """Tray + pywebview yasam dongusu.
