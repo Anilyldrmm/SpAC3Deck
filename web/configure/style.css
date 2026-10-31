@@ -486,3 +486,13 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
 }
 .inspector-delete:hover { background: var(--red-soft); }
 .inspector-copy { margin-top: 8px; margin-right: 8px; color: var(--accent); }
+
+.settings-check { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; color: var(--ink, #f4f4f6); cursor: pointer; }
+.settings-check input { width: 16px; height: 16px; accent-color: #4caf50; }
+
+#win-controls { display: flex; align-self: stretch; margin-right: -16px; margin-left: 6px; }
+#win-controls[hidden] { display: none; }
+#win-controls button { width: 46px; border: 0; border-radius: 0; background: transparent; color: var(--ink, #f4f4f6); display: grid; place-items: center; }
+#win-controls button svg { width: 12px; height: 12px; }
+#win-controls button:hover { background: rgba(255, 255, 255, 0.08); }
+#win-controls .win-close:hover { background: #e5484d; color: #fff; }

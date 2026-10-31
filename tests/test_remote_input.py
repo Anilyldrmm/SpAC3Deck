@@ -147,3 +147,9 @@ def test_ws_disconnect_releases_held_mouse_button(tmp_path):
         ws.send_json({"type": "input", "kind": "button", "button": "left", "down": True})
     assert got[0]["down"] is True
     assert got[-1] == {"type": "input", "kind": "button", "button": "left", "down": False}
+
+
+def test_sources_monitors_not_shadowed(tmp_path):
+    # /api/monitors rotasi, sources.list_monitors'u golgelemisti -> 500
+    client, _ = build_client(tmp_path)
+    assert client.get("/api/sources/monitors?token=1234").status_code == 200

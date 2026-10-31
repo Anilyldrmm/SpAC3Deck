@@ -6,11 +6,11 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header id="topbar">
-    <div id="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>MacroDeck <span id="app-version" class="hint"></span></div>
+  <header id="topbar" class="pywebview-drag-region">
+    <div id="brand" class="pywebview-drag-region"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>MacroDeck <span id="app-version" class="hint"></span></div>
     <nav id="page-tabs"></nav>
     <button id="add-page" title="Sayfa ekle">+</button>
-    <div id="topbar-spacer"></div>
+    <div id="topbar-spacer" class="pywebview-drag-region"></div>
     <span id="save-indicator" class="idle">Kaydedildi</span>
     <span id="pin-display" title="Telefon bağlanırken bu PIN'i gir"></span>
     <button id="bridge-toggle" class="icon-toggle" title="Discord Bridge" aria-label="Discord Bridge">
@@ -20,6 +20,11 @@
     <button id="history-toggle" class="icon-toggle" title="Geri al / Geçmiş" aria-label="Geri al / Geçmiş"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>
     <button id="settings-toggle" class="icon-toggle" title="Ayarlar" aria-label="Ayarlar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     <button id="qr-toggle" class="icon-toggle" title="Telefon Bağla" aria-label="Telefon Bağla"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></button>
+    <div id="win-controls" hidden>
+      <button data-win="minimize" title="Küçült" aria-label="Küçült"><svg viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.2"/></svg></button>
+      <button data-win="toggle_maximize" title="Büyüt" aria-label="Büyüt"><svg viewBox="0 0 12 12" fill="none"><rect x="2.5" y="2.5" width="7" height="7" stroke="currentColor" stroke-width="1.2"/></svg></button>
+      <button data-win="close" title="Kapat" aria-label="Kapat" class="win-close"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.2"/></svg></button>
+    </div>
   </header>
 
   <div id="qr-popover" hidden>
@@ -65,6 +70,10 @@
       <span>×</span>
       <input id="grid-rows-input" type="number" min="1" max="10" />
     </div>
+    <label class="settings-check">
+      <input id="stack-pages-checkbox" type="checkbox" />
+      <span>Tüm sayfaları telefonda alt alta tek ekranda göster</span>
+    </label>
 
     <div class="settings-divider"></div>
 

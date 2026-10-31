@@ -61,11 +61,13 @@ struct DeckConfig: Codable, Equatable {
     var pages: [Page]
     var gridColumns: Int
     var gridRows: Int
+    var stackPages: Bool?
 
     enum CodingKeys: String, CodingKey {
         case pages
         case gridColumns = "grid_columns"
         case gridRows = "grid_rows"
+        case stackPages = "stack_pages"
     }
 }
 

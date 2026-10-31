@@ -1246,6 +1246,7 @@ document.getElementById("settings-toggle").addEventListener("click", async () =>
 
   document.getElementById("grid-columns-input").value = config.grid_columns ?? 5;
   document.getElementById("grid-rows-input").value = config.grid_rows ?? 3;
+  document.getElementById("stack-pages-checkbox").checked = Boolean(config.stack_pages);
 
   renderMediaKeysSettings();
 });
@@ -1493,6 +1494,20 @@ function updateGridSize() {
   renderGrid();
   scheduleSave();
 }
+
+// pywebview cercevesiz pencere: kontrol dugmeleri sadece uygulama icinde gorunur
+window.addEventListener("pywebviewready", () => {
+  const box = document.getElementById("win-controls");
+  box.hidden = false;
+  box.querySelectorAll("button").forEach((b) =>
+    b.addEventListener("click", () => window.pywebview.api[b.dataset.win]())
+  );
+});
+
+document.getElementById("stack-pages-checkbox").addEventListener("change", (event) => {
+  config.stack_pages = event.target.checked;
+  scheduleSave();
+});
 
 document.getElementById("grid-columns-input").addEventListener("change", updateGridSize);
 document.getElementById("grid-rows-input").addEventListener("change", updateGridSize);

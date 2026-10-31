@@ -27,6 +27,7 @@ def test_save_writes_valid_json(tmp_path):
         "pages": [],
         "grid_columns": 5,
         "grid_rows": 3,
+        "stack_pages": False,
         "media_keys": {
             "enabled": False,
             "target_type": "strip",
@@ -81,3 +82,10 @@ def test_media_keys_custom_key_bindings_roundtrip(tmp_path):
     assert loaded.media_keys.up_keys == ["ctrl", "alt", "f19"]
     assert loaded.media_keys.down_keys == ["ctrl", "alt", "f20"]
     assert loaded.media_keys.mute_keys == ["f13"]
+
+
+def test_stack_pages_default_and_roundtrip(tmp_path):
+    assert DeckConfig().stack_pages is False
+    path = tmp_path / "deck.json"
+    save_config(DeckConfig(stack_pages=True), path)
+    assert load_config(path).stack_pages is True

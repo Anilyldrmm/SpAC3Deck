@@ -83,6 +83,30 @@ def _run_server(app):
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning", access_log=False, ws_ping_timeout=None)
 
 
+class _WindowControls:
+    """Cercevesiz configurator penceresinin kucult/buyut/kapat dugmeleri (sayfadan cagrilir)."""
+
+    # _ onekli: pywebview js_api niteliklerini dolasir, pencere nesnesini gorurse sonsuz ozyineleme
+    _window = None
+    _maximized = False
+
+    def attach(self, window):
+        self._window = window
+
+    def minimize(self):
+        self._window.minimize()
+
+    def toggle_maximize(self):
+        if self._maximized:
+            self._window.restore()
+        else:
+            self._window.maximize()
+        self._maximized = not self._maximized
+
+    def close(self):
+        self._window.destroy()
+
+
 class AppLifecycle:
     """Tray + pywebview yasam dongusu.
 
@@ -140,9 +164,13 @@ class AppLifecycle:
                     logger.debug("mevcut configurator penceresi gosterilemedi: %s", exc)
                 return self._configurator_window
 
+            api = _WindowControls()
+            # cerceve yok: surukleme/kucultme/kapatma sayfadaki ust cubuktan (pywebview-drag-region)
             window = self._webview.create_window(
-                CONFIGURATOR_TITLE, self._configurator_url, width=1180, height=740, min_size=(960, 600)
+                CONFIGURATOR_TITLE, self._configurator_url, width=1180, height=740, min_size=(960, 600),
+                frameless=True, easy_drag=False, js_api=api,
             )
+            api.attach(window)
             self._configurator_window = window
             try:
                 window.events.closed += self._on_configurator_closed

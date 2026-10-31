@@ -10,27 +10,50 @@ struct DeckView: View {
             Group {
                 if let config = deck.config, let page = currentPage(config) {
                     GeometryReader { geo in
-                        let multiPage = config.pages.count > 1
+                        let stacked = config.stackPages == true && config.pages.count > 1
                         ScrollView {
-                            VStack(spacing: 14) {
-                                if multiPage {
-                                    Picker("Sayfa", selection: pageSelection(config)) {
-                                        ForEach(config.pages) { page in
-                                            Text(page.name).tag(page.name)
+                            VStack(spacing: stacked ? 28 : 14) {
+                                if stacked {
+                                    // her sayfa kendi bölümünde, ekran sayfa sayısına bölünür
+                                    let share = (geo.size.height - 32 - 28 * CGFloat(config.pages.count - 1)) / CGFloat(config.pages.count)
+                                    ForEach(config.pages) { p in
+                                        VStack(spacing: 8) {
+                                            Text(p.name).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            DeckGrid(
+                                                page: p,
+                                                columns: max(1, config.gridColumns),
+                                                availableWidth: geo.size.width - 32,
+                                                availableHeight: share - 26
+                                            )
                                         }
                                     }
-                                    .pickerStyle(.segmented)
+                                } else {
+                                    DeckGrid(
+                                        page: page,
+                                        columns: max(1, config.gridColumns),
+                                        availableWidth: geo.size.width - 32,
+                                        availableHeight: geo.size.height - 32
+                                    )
                                 }
-                                DeckGrid(
-                                    page: page,
-                                    columns: max(1, config.gridColumns),
-                                    availableWidth: geo.size.width - 32,
-                                    availableHeight: geo.size.height - 32 - (multiPage ? 46 : 0)
-                                )
                             }
                             .padding(16)
                             // içerik ekrandan kısaysa dikey ortala; uzunsa kaydır
                             .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                        }
+                    }
+                    // sayfa adları üstte sabit
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if config.pages.count > 1 && config.stackPages != true {
+                            Picker("Sayfa", selection: pageSelection(config)) {
+                                ForEach(config.pages) { page in
+                                    Text(page.name).tag(page.name)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(.bar)
                         }
                     }
                 } else {

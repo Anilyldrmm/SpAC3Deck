@@ -46,6 +46,7 @@ class DeckConfig(BaseModel):
     pages: list[Page] = Field(default_factory=list)
     grid_columns: int = 5
     grid_rows: int = 3
+    stack_pages: bool = False  # telefonda tum sayfalar alt alta tek ekranda
     media_keys: MediaKeysConfig = Field(default_factory=MediaKeysConfig)
 
 

@@ -602,7 +602,7 @@ def create_app(
         return True
 
     @app.get("/api/monitors")
-    def list_monitors(request: Request, token: str | None = None):
+    def pc_monitors(request: Request, token: str | None = None):
         _require_auth(request, token)
         return {"monitors": [
             {"index": i, "width": r[2] - r[0], "height": r[3] - r[1], "primary": i == 0}
