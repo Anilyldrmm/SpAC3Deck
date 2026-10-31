@@ -60,13 +60,21 @@ enum PinStore {
         try? url.setResourceValues(values)
     }
 
+    /// Önceki sürüm PIN'i UserDefaults'a yazıyordu: varsa güvenli yere taşı, düz kopyayı sil.
+    private static let legacyKey = "pinFallback"
+
     static func load() -> String? {
+        if let legacy = UserDefaults.standard.string(forKey: legacyKey) {
+            UserDefaults.standard.removeObject(forKey: legacyKey)
+            save(legacy)
+        }
         if let pin = Keychain.get("pin") { return pin }
         guard let url = fallbackURL, let data = try? Data(contentsOf: url) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
     static func clear() {
+        UserDefaults.standard.removeObject(forKey: legacyKey)
         Keychain.remove("pin")
         if let url = fallbackURL { try? FileManager.default.removeItem(at: url) }
     }
