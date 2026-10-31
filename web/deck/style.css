@@ -380,3 +380,13 @@ body {
   font-size: 15px;
 }
 #clip button:active { background: #333; }
+
+/* ekran izleme: kare, iz pedi yuzeyinin arka plani olur */
+#pad-surface.live {
+  background-color: #000;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+#pad-surface.live span { display: none; }
+#pad-screen.on { background: #2f5d3a; }

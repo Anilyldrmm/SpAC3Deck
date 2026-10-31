@@ -148,12 +148,20 @@ def _open_clipboard() -> bool:
     return False
 
 
+# sifre yoneticileri kopyaladiklari sifreyi bu formatla isaretler; telefona yayilmamali
+_u32.RegisterClipboardFormatW.argtypes = [wintypes.LPCWSTR]
+_u32.IsClipboardFormatAvailable.argtypes = [wintypes.UINT]
+_EXCLUDE_FORMAT = _u32.RegisterClipboardFormatW("ExcludeClipboardContentFromMonitorProcessing")
+
+
 def clipboard_seq() -> int:
     return _u32.GetClipboardSequenceNumber()
 
 
 def get_clipboard_text() -> str | None:
-    """Pano metni; metin yoksa "", pano mesgulse None."""
+    """Pano metni; metin yoksa veya gizli isaretliyse "", pano mesgulse None."""
+    if _u32.IsClipboardFormatAvailable(_EXCLUDE_FORMAT):
+        return ""
     if not _open_clipboard():
         return None
     try:

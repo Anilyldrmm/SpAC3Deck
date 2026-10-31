@@ -21,7 +21,7 @@ from . import backups as backups_module
 from .config import DeckConfig, load_config, save_config
 from .discord_bridge import DiscordBridge, load_or_create_bridge_token
 from .paths import web_root as get_web_root
-from . import os_bridge, remote_input
+from . import os_bridge, remote_input, screen
 from .qr import generate_deck_url, generate_qr_png
 from .security import AttemptLimiter, build_allowed_origins, origin_allowed
 from .sources import find_local_steam_image, list_monitors, list_steam_games
@@ -32,6 +32,7 @@ from .ws import ConnectionManager
 
 DEFAULT_PORT = 8765
 CLIPBOARD_MAX = 100_000
+SCREEN_INTERVAL = 0.03  # kareler arasi bekleme; yakalama suresi ustune biner
 
 AUTH_OK = "ok"
 AUTH_BAD_ORIGIN = "bad_origin"
@@ -147,6 +148,7 @@ def create_app(
     app.state.discord_bridge = DiscordBridge()
     app.state.clipboard = os_bridge  # clipboard_seq/get_clipboard_text/set_clipboard_text; testlerde sahte
     app.state.clipboard_last = ""
+    app.state.screen_grab = screen.grab_jpeg  # testlerde sahte
     app.state.input_handler = remote_input.handle  # testlerde sahte ile degistirilir
     app.state.bridge_token = load_or_create_bridge_token(
         config_path.parent / "bridge_token.txt"
@@ -538,15 +540,34 @@ def create_app(
         asyncio.create_task(_poll_voicemeeter())
         asyncio.create_task(_poll_clipboard())
 
-    @app.websocket("/ws")
-    async def ws_endpoint(websocket: WebSocket, token: str):
+    async def _admit(websocket: WebSocket, token: str) -> bool:
         client_ip = websocket.client.host if websocket.client else "unknown"
         result = _authorize(client_ip, websocket.headers.get("origin"), token)
         if result == AUTH_RATE_LIMITED:
             await websocket.close(code=4429)
-            return
+            return False
         if result != AUTH_OK:
             await websocket.close(code=4403)
+            return False
+        return True
+
+    @app.websocket("/ws/screen")
+    async def screen_endpoint(websocket: WebSocket, token: str):
+        if not await _admit(websocket, token):
+            return
+        await websocket.accept()
+        try:
+            while True:
+                frame = await asyncio.to_thread(app.state.screen_grab)
+                await websocket.send_bytes(frame)
+                await asyncio.sleep(SCREEN_INTERVAL)
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+
+    @app.websocket("/ws")
+    async def ws_endpoint(websocket: WebSocket, token: str):
+        client_ip = websocket.client.host if websocket.client else "unknown"
+        if not await _admit(websocket, token):
             return
 
         await app.state.manager.connect(websocket)

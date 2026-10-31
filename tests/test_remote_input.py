@@ -54,3 +54,22 @@ def test_clipboard_pc_to_phone_on_connect_and_phone_to_pc(tmp_path):
         ws.send_json({"type": "clipboard", "text": 5})  # gecersiz: yok sayilmali
         ws.send_json({"type": "input", "kind": "scroll", "dy": 1})  # soket hala canli
     assert clip.text == "telefondan"
+
+
+def test_screen_stream_sends_frames_and_rejects_bad_pin(tmp_path):
+    client, _ = build_client(tmp_path)
+    client.app.state.screen_grab = lambda: b"jpegbytes"
+    with client.websocket_connect("/ws/screen?token=1234") as ws:
+        assert ws.receive_bytes() == b"jpegbytes"
+        assert ws.receive_bytes() == b"jpegbytes"
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws/screen?token=0000"):
+            pass
+
+
+def test_grab_jpeg_real_screen_is_jpeg():
+    from macrodeck.screen import grab_jpeg
+    data = grab_jpeg()
+    assert data[:2] == b"\xff\xd8" and len(data) < 400_000

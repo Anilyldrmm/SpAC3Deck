@@ -640,8 +640,43 @@ padInput.addEventListener("keydown", (e) => {
   }
 });
 
+// --- Ekran izleme: /ws/screen'den gelen JPEG kareleri pad yuzeyine cizilir ---
+const padScreenBtn = document.getElementById("pad-screen");
+let screenSocket = null;
+let screenUrl = null;
+
+function stopScreen() {
+  if (screenSocket) screenSocket.close();
+  screenSocket = null;
+  if (screenUrl) URL.revokeObjectURL(screenUrl);
+  screenUrl = null;
+  padSurface.classList.remove("live");
+  padSurface.style.backgroundImage = "";
+  padScreenBtn.classList.remove("on");
+}
+
+function startScreen() {
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const sock = new WebSocket(`${protocol}://${window.location.host}/ws/screen?token=${encodeURIComponent(currentPin)}`);
+  screenSocket = sock;
+  padScreenBtn.classList.add("on");
+  sock.addEventListener("message", (e) => {
+    const next = URL.createObjectURL(new Blob([e.data], { type: "image/jpeg" }));
+    padSurface.style.backgroundImage = `url(${next})`;
+    padSurface.classList.add("live");
+    if (screenUrl) URL.revokeObjectURL(screenUrl);
+    screenUrl = next;
+  });
+  sock.addEventListener("close", () => { if (screenSocket === sock) stopScreen(); });
+}
+
+padScreenBtn.addEventListener("click", () => (screenSocket ? stopScreen() : startScreen()));
+
 padToggle.addEventListener("click", () => { padEl.hidden = false; });
-document.getElementById("pad-close").addEventListener("click", () => { padEl.hidden = true; });
+document.getElementById("pad-close").addEventListener("click", () => {
+  stopScreen();
+  padEl.hidden = true;
+});
 
 // --- Pano: PC panosu otomatik gelir, telefondan elle gonderilir ---
 // (HTTP'de navigator.clipboard yok: kopyalama icin secim + execCommand, yapistirma elle)
