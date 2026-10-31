@@ -23,6 +23,8 @@ def handle(msg: dict, bridge=os_bridge) -> None:
         bridge.mouse_move(_num(msg.get("dx"), MAX_MOVE), _num(msg.get("dy"), MAX_MOVE))
     elif kind == "click" and msg.get("button", "left") in MOUSE_BUTTONS:
         bridge.mouse_click(msg.get("button", "left"))
+    elif kind == "button" and msg.get("button", "left") in MOUSE_BUTTONS and isinstance(msg.get("down"), bool):
+        bridge.mouse_button(msg.get("button", "left"), msg["down"])
     elif kind == "scroll":
         bridge.mouse_scroll(_num(msg.get("dy"), MAX_SCROLL))
     elif kind == "text" and isinstance(msg.get("text"), str):

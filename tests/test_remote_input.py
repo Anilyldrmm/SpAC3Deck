@@ -17,7 +17,11 @@ def test_handle_validates_and_clamps():
     handle({"kind": "key", "key": "f4"}, r)
     handle({"kind": "click"}, r)
     handle({"kind": "text", "text": "ğüş"}, r)
-    assert r.calls == [("mouse_move", 300, -5), ("mouse_click", "left"), ("type_text", "ğüş")]
+    handle({"kind": "button", "button": "left", "down": True}, r)
+    handle({"kind": "button", "button": "left", "down": "yes"}, r)
+    assert r.calls == [
+        ("mouse_move", 300, -5), ("mouse_click", "left"), ("type_text", "ğüş"), ("mouse_button", "left", True),
+    ]
 
 
 def test_ws_input_goes_to_handler_and_bad_input_keeps_socket(tmp_path):
@@ -27,7 +31,8 @@ def test_ws_input_goes_to_handler_and_bad_input_keeps_socket(tmp_path):
     with client.websocket_connect("/ws?token=1234") as ws:
         ws.send_json({"type": "input", "kind": "move", "dx": 1, "dy": 2})
         ws.send_json({"type": "input", "kind": "scroll", "dy": 1})
-    assert [m["kind"] for m in got] == ["move", "scroll"]
+    # bağlantı kapanırken sunucu basılı fare tuşunu bırakır (son mesaj)
+    assert [m["kind"] for m in got] == ["move", "scroll", "button"]
 
 
 class FakeClip:
@@ -114,3 +119,13 @@ def test_upload_rejects_oversize_before_reading_body(tmp_path, monkeypatch):
                     headers={"content-length": str(3 * 1024**3)})
     assert r.status_code in (400, 413)
     assert not (tmp_path / "dosyalar" / "Gelen").exists() or not any((tmp_path / "dosyalar" / "Gelen").iterdir())
+
+
+def test_ws_disconnect_releases_held_mouse_button(tmp_path):
+    client, _ = build_client(tmp_path)
+    got = []
+    client.app.state.input_handler = got.append
+    with client.websocket_connect("/ws?token=1234") as ws:
+        ws.send_json({"type": "input", "kind": "button", "button": "left", "down": True})
+    assert got[0]["down"] is True
+    assert got[-1] == {"type": "input", "kind": "button", "button": "left", "down": False}

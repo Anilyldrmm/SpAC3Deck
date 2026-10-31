@@ -1,3 +1,4 @@
 version: 1
 bundleID: com.spac3.macrodeckphone
 infoPath: Info.plist
+iconPath: AppIcon.png

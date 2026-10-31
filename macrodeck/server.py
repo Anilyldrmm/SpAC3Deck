@@ -676,6 +676,11 @@ def create_app(
             pass
         finally:
             app.state.manager.disconnect(websocket)
+            # surukle sirasinda baglanti kopsa fare tusu basili kalmasin
+            try:
+                app.state.input_handler({"type": "input", "kind": "button", "button": "left", "down": False})
+            except Exception as e:
+                logger.debug(f"release on disconnect failed: {e}")
 
     @app.websocket("/ws/discord-bridge")
     async def discord_bridge_endpoint(websocket: WebSocket, token: str):

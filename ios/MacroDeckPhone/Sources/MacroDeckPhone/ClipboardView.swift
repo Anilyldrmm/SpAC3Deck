@@ -1,48 +1,54 @@
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
-/// PC panosu otomatik gelir; telefondaki pano tek dokunuşla PC'ye gönderilir.
 struct ClipboardView: View {
     @Environment(DeckConnection.self) private var deck
-    @State private var status = ""
+    @AppStorage("autoCopy") private var autoCopy = false
+    @State private var sent = false
+    @State private var copied = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("PC panosu").font(.footnote).foregroundStyle(.secondary)
-            ScrollView {
-                Text(deck.pcClipboard.isEmpty ? "PC'de kopyaladığın metin burada görünür" : deck.pcClipboard)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .foregroundStyle(deck.pcClipboard.isEmpty ? .secondary : .primary)
-                    .textSelection(.enabled)
-            }
-            .padding(12)
-            .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 14))
-
-            Button("Telefona kopyala") {
-                #if canImport(UIKit)
-                UIPasteboard.general.string = deck.pcClipboard
-                #endif
-                status = "Kopyalandı"
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(deck.pcClipboard.isEmpty)
-
-            Button("Telefon panosunu PC'ye gönder") {
-                #if canImport(UIKit)
-                if let text = UIPasteboard.general.string, !text.isEmpty {
-                    deck.sendClipboard(text)
-                    status = "Gönderildi"
-                } else {
-                    status = "Telefon panosunda metin yok"
+        NavigationStack {
+            Form {
+                Section("PC panosu") {
+                    if deck.pcClipboard.isEmpty {
+                        Text("PC'de kopyalanan metin burada görünür.").foregroundStyle(.secondary)
+                    } else {
+                        Text(deck.pcClipboard)
+                            .lineLimit(12)
+                            .textSelection(.enabled)
+                    }
+                    Button {
+                        UIPasteboard.general.string = deck.pcClipboard
+                        copied.toggle()
+                    } label: {
+                        Label("Telefona kopyala", systemImage: "doc.on.doc")
+                    }
+                    .disabled(deck.pcClipboard.isEmpty)
+                    .sensoryFeedback(.success, trigger: copied)
                 }
-                #endif
-            }
-            .buttonStyle(.bordered)
 
-            Text(status).font(.footnote).foregroundStyle(.secondary)
+                Section {
+                    Button {
+                        if let text = UIPasteboard.general.string, !text.isEmpty {
+                            deck.sendClipboard(text)
+                            sent.toggle()
+                        }
+                    } label: {
+                        Label("Telefondaki panoyu PC'ye gönder", systemImage: "arrow.up.doc")
+                    }
+                    .sensoryFeedback(.success, trigger: sent)
+                } footer: {
+                    Text("iOS, başka bir uygulamanın panosunu okurken \"Yapıştırmaya izin ver\" diye sorabilir.")
+                }
+
+                Section {
+                    Toggle("PC'de kopyalananı otomatik al", isOn: $autoCopy)
+                } footer: {
+                    Text("Uygulama açıkken PC'de kopyaladığın metin telefon panosuna da geçer.")
+                }
+            }
+            .navigationTitle("Pano")
+            .safeAreaInset(edge: .top) { ConnectionBanner() }
         }
-        .padding(14)
     }
 }

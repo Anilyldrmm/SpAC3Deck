@@ -98,6 +98,11 @@ def mouse_click(button: str) -> None:
     _send(_mouse(down), _mouse(up))
 
 
+def mouse_button(button: str, down: bool) -> None:
+    flags = _MOUSE_FLAGS[button]
+    _send(_mouse(flags[0] if down else flags[1]))
+
+
 def mouse_scroll(steps: int) -> None:
     # pozitif = yukari; 1 adim = 120 (WHEEL_DELTA)
     _send(_mouse(_WHEEL, data=steps * 120))
