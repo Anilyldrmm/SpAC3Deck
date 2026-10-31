@@ -36,26 +36,38 @@ enum Keychain {
 }
 
 /// PIN'i Anahtar Zinciri'ne yazar. Ücretsiz Apple kimliğiyle imzalanan uygulamada Anahtar Zinciri
-/// bazen yazamıyor (PIN her açılışta sorulur); yazılamazsa UserDefaults'a düşer.
-/// shortcut: yedek düz metin, PIN yalnız ev ağındaki bir sunucuyu açar; ücretli geliştirici hesabıyla kaldırılır.
+/// bazen yazamıyor (PIN her açılışta sorulur); yazılamazsa uygulamaya özel, korumalı ve yedeğe
+/// alınmayan bir dosyaya düşer.
+/// shortcut: yedek dosya şifreli değil (yalnız iOS dosya koruması), PIN yalnız ev ağındaki sunucuyu açar;
+/// ücretli geliştirici hesabı ya da sunucunun verdiği eşleşme belirteciyle kaldırılır.
 enum PinStore {
-    private static let fallbackKey = "pinFallback"
+    private static var fallbackURL: URL? {
+        try? FileManager.default
+            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("pin.dat")
+    }
 
     static func save(_ pin: String) {
         Keychain.set(pin, for: "pin")
+        guard var url = fallbackURL else { return }
         if Keychain.get("pin") == pin {
-            UserDefaults.standard.removeObject(forKey: fallbackKey)
-        } else {
-            UserDefaults.standard.set(pin, forKey: fallbackKey)
+            try? FileManager.default.removeItem(at: url)
+            return
         }
+        try? Data(pin.utf8).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
     }
 
     static func load() -> String? {
-        Keychain.get("pin") ?? UserDefaults.standard.string(forKey: fallbackKey)
+        if let pin = Keychain.get("pin") { return pin }
+        guard let url = fallbackURL, let data = try? Data(contentsOf: url) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     static func clear() {
         Keychain.remove("pin")
-        UserDefaults.standard.removeObject(forKey: fallbackKey)
+        if let url = fallbackURL { try? FileManager.default.removeItem(at: url) }
     }
 }
