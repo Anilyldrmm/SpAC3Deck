@@ -9,19 +9,29 @@ struct DeckView: View {
         NavigationStack {
             Group {
                 if let config = deck.config, let page = currentPage(config) {
-                    ScrollView {
-                        VStack(spacing: 14) {
-                            if config.pages.count > 1 {
-                                Picker("Sayfa", selection: pageSelection(config)) {
-                                    ForEach(config.pages) { page in
-                                        Text(page.name).tag(page.name)
+                    GeometryReader { geo in
+                        let multiPage = config.pages.count > 1
+                        ScrollView {
+                            VStack(spacing: 14) {
+                                if multiPage {
+                                    Picker("Sayfa", selection: pageSelection(config)) {
+                                        ForEach(config.pages) { page in
+                                            Text(page.name).tag(page.name)
+                                        }
                                     }
+                                    .pickerStyle(.segmented)
                                 }
-                                .pickerStyle(.segmented)
+                                DeckGrid(
+                                    page: page,
+                                    columns: max(1, config.gridColumns),
+                                    availableWidth: geo.size.width - 32,
+                                    availableHeight: geo.size.height - 32 - (multiPage ? 46 : 0)
+                                )
                             }
-                            DeckGrid(page: page, columns: max(1, config.gridColumns))
+                            .padding(16)
+                            // içerik ekrandan kısaysa dikey ortala; uzunsa kaydır
+                            .frame(maxWidth: .infinity, minHeight: geo.size.height)
                         }
-                        .padding(16)
                     }
                 } else {
                     ContentUnavailableView(
@@ -74,6 +84,26 @@ private struct DeckRow: Identifiable {
 struct DeckGrid: View {
     let page: Page
     let columns: Int
+    let availableWidth: CGFloat
+    let availableHeight: CGFloat
+
+    private let spacing: CGFloat = 12
+    private let gainHeight: CGFloat = 92
+
+    /// Kare kenarı: genişliğe sığar; yatayda yüksekliğe de sığacak şekilde küçülür (ekrana ortalı, kaydırmasız).
+    private var side: CGFloat {
+        let wFit = (availableWidth - spacing * CGFloat(columns - 1)) / CGFloat(columns)
+        let gainRows = rows.filter { $0.buttons.count == 1 && isGain($0.buttons[0]) }.count
+        let squareRows = rows.count - gainRows
+        guard squareRows > 0 else { return wFit }
+        let hFit = (availableHeight - CGFloat(gainRows) * (gainHeight + spacing) - CGFloat(squareRows - 1) * spacing) / CGFloat(squareRows)
+        return max(40, min(wFit, max(hFit, 84), 190))
+    }
+
+    private func isGain(_ button: DeckButton) -> Bool {
+        if case .gain = button.kind { return true }
+        return false
+    }
 
     /// Kare butonlar `columns` kadarlık satırlara dizilir, sürgüler tam genişlikte kendi satırını alır.
     private var rows: [DeckRow] {
@@ -93,17 +123,19 @@ struct DeckGrid: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        let side = side
+        VStack(spacing: spacing) {
             ForEach(rows) { row in
-                if row.buttons.count == 1, case .gain = row.buttons[0].kind {
+                if row.buttons.count == 1, isGain(row.buttons[0]) {
                     GainTile(page: page, button: row.buttons[0])
+                        .frame(width: side * CGFloat(columns) + spacing * CGFloat(columns - 1))
                 } else {
-                    HStack(spacing: 12) {
+                    HStack(spacing: spacing) {
                         ForEach(row.buttons) { button in
-                            ButtonTile(page: page, button: button)
+                            ButtonTile(page: page, button: button, side: side)
                         }
                         ForEach(0..<(columns - row.buttons.count), id: \.self) { _ in
-                            Color.clear.frame(maxWidth: .infinity)
+                            Color.clear.frame(width: side, height: side)
                         }
                     }
                 }
@@ -119,6 +151,7 @@ struct ButtonTile: View {
     @Environment(DeckConnection.self) private var deck
     let page: Page
     let button: DeckButton
+    let side: CGFloat
     @State private var taps = 0
 
     private var isOn: Bool {
@@ -163,7 +196,7 @@ struct ButtonTile: View {
 
     private var symbolFace: some View {
         VStack(spacing: 6) {
-            IconView(button: button, size: 30)
+            IconView(button: button, size: min(max(side * 0.36, 24), 54))
                 .foregroundStyle(isOn ? Color.white : Brand.accent)
             Text(button.label)
                 .font(.caption.weight(.medium))
@@ -178,14 +211,13 @@ struct ButtonTile: View {
             }
         }
         .padding(6)
-        .frame(maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
+        .frame(width: side, height: side)
         .background(isOn ? Brand.accent : Color(.secondarySystemGroupedBackground), in: tileShape)
     }
 
     private var imageFace: some View {
         Color(.secondarySystemGroupedBackground)
-            .aspectRatio(1, contentMode: .fit)
+            .frame(width: side, height: side)
             .overlay { IconView(button: button, size: nil) }
             .overlay(alignment: .bottom) {
                 Text(button.label)

@@ -10,6 +10,9 @@ struct TrackpadView: View {
     @State private var showScreen = false
     @State private var showKeyboard = false
     @State private var showHelp = false
+    @State private var fullscreen = false
+    @State private var monitors: [PCMonitor] = []
+    @State private var monitor = 0
     let onClose: () -> Void
 
     var body: some View {
@@ -34,19 +37,23 @@ struct TrackpadView: View {
                 .opacity(0.01)
                 .accessibilityHidden(true)
         }
-        .overlay(alignment: .top) { topBar }
+        .overlay(alignment: .top) { fullscreen ? AnyView(handle) : AnyView(topBar) }
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(true)
+        .persistentSystemOverlays(fullscreen ? .hidden : .automatic)
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             stream.stop()
             showScreen = false
             showKeyboard = false
+            fullscreen = false
         }
         .onChange(of: showScreen) { _, on in
-            if on, let url = deck.wsURL("/ws/screen") { stream.start(url) } else { stream.stop() }
+            if on { Task { await loadMonitors() }; restartStream() } else { stream.stop() }
         }
+        .onChange(of: monitor) { _, _ in restartStream() }
+        .onChange(of: fullscreen) { _, _ in restartStream() } // tam ekranda daha keskin kare
         .sheet(isPresented: $showHelp) { PadHelp() }
     }
 
@@ -54,7 +61,11 @@ struct TrackpadView: View {
         HStack(spacing: 6) {
             barButton("xmark", label: "Kapat", action: onClose)
             Spacer()
-            barButton(showScreen ? "display" : "display", label: showScreen ? "Ekranı gizle" : "PC ekranını göster", on: showScreen) {
+            if showScreen {
+                if monitors.count > 1 { monitorMenu }
+                barButton("arrow.up.left.and.arrow.down.right", label: "Tam ekran") { fullscreen = true }
+            }
+            barButton("display", label: showScreen ? "Ekranı gizle" : "PC ekranını göster", on: showScreen) {
                 showScreen.toggle()
             }
             barButton("keyboard", label: showKeyboard ? "Klavyeyi kapat" : "Klavye", on: showKeyboard) {
@@ -64,6 +75,56 @@ struct TrackpadView: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
+    }
+
+    /// Tam ekranda tek küçük tutamaç kalır; dokununca çubuk geri gelir.
+    private var handle: some View {
+        Button { fullscreen = false } label: {
+            Image(systemName: "arrow.down.right.and.arrow.up.left")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial.opacity(0.6), in: Circle())
+        }
+        .accessibilityLabel("Tam ekrandan çık")
+        .padding(.top, 4)
+    }
+
+    private var monitorMenu: some View {
+        Menu {
+            ForEach(monitors) { m in
+                Button {
+                    monitor = m.index
+                } label: {
+                    Label("Ekran \(m.index + 1) (\(m.width)×\(m.height))" + (m.primary ? " · ana" : ""),
+                          systemImage: monitor == m.index ? "checkmark" : "display")
+                }
+            }
+        } label: {
+            Text("\(monitor + 1)")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityLabel("Ekran seç")
+    }
+
+    private func restartStream() {
+        guard showScreen else { return }
+        let items = [
+            URLQueryItem(name: "monitor", value: String(monitor)),
+            URLQueryItem(name: "width", value: fullscreen ? "1600" : "1000"),
+        ]
+        if let url = deck.wsURL("/ws/screen", items: items) { stream.start(url) }
+    }
+
+    private func loadMonitors() async {
+        guard let url = deck.restURL("/api/monitors"),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let list = try? JSONDecoder().decode(MonitorList.self, from: data) else { return }
+        monitors = list.monitors
+        if monitor >= monitors.count { monitor = 0 }
     }
 
     private func barButton(_ symbol: String, label: String, on: Bool = false, action: @escaping () -> Void) -> some View {
@@ -76,6 +137,16 @@ struct TrackpadView: View {
         }
         .accessibilityLabel(label)
     }
+}
+
+private struct MonitorList: Decodable { var monitors: [PCMonitor] }
+
+struct PCMonitor: Decodable, Identifiable {
+    var index: Int
+    var width: Int
+    var height: Int
+    var primary: Bool
+    var id: Int { index }
 }
 
 private struct PadHelp: View {

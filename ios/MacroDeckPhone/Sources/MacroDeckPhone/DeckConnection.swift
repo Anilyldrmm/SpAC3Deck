@@ -47,6 +47,7 @@ final class DeckConnection {
     private(set) var host = ""
 
     private var pin = ""
+    private var fatal = false // yanlış PIN gibi: tekrar denemek anlamsız
     private var socket: URLSessionWebSocketTask?
     private var loop: Task<Void, Never>?
     private let rest: URLSession = {
@@ -58,19 +59,43 @@ final class DeckConnection {
 
     // MARK: - Bağlantı yaşam döngüsü
 
+    /// Kayıtlı PC'ye bağlan (uygulama açılışı / ön plana dönüş). PC'ye ulaşılamazsa vazgeçmez, PIN'i sormaz.
     func autoConnect() {
-        guard state == .disconnected, config == nil else { return }
+        switch state {
+        case .connected, .connecting, .reconnecting:
+            return
+        case .disconnected, .failed:
+            guard !fatal else { return }
+        }
         let savedHost = UserDefaults.standard.string(forKey: "deckHost") ?? ""
-        guard !savedHost.isEmpty, let savedPIN = Keychain.get("pin") else { return }
-        connect(host: savedHost, pin: savedPIN)
+        guard !savedHost.isEmpty, let savedPIN = PinStore.load() else { return }
+        connect(host: savedHost, pin: savedPIN, persistent: true)
     }
 
-    func connect(host: String, pin: String) {
+    /// Arka plandan dönünce: bağlantı ölmüşse hemen yenile, canlıysa dokunma.
+    func resume() {
+        if state == .connected, let socket {
+            socket.sendPing { error in
+                if error != nil { socket.cancel(with: .goingAway, reason: nil) } // receive döngüsü yeniden bağlanır
+            }
+        } else {
+            autoConnect()
+        }
+    }
+
+    func connect(host: String, pin: String, persistent: Bool = false) {
         stop()
         self.host = host
         self.pin = pin
+        fatal = false
         state = .connecting
-        loop = Task { await run() }
+        loop = Task { await run(persistent: persistent) }
+    }
+
+    /// Bağlanmayı bırak ama kayıtlı PIN'i silme.
+    func cancel() {
+        stop()
+        state = .disconnected
     }
 
     func disconnect() {
@@ -79,7 +104,7 @@ final class DeckConnection {
         values = [:]
         serverVersion = nil
         state = .disconnected
-        Keychain.remove("pin")
+        PinStore.clear()
     }
 
     private func stop() {
@@ -89,9 +114,9 @@ final class DeckConnection {
         socket = nil
     }
 
-    private func run() async {
+    private func run(persistent: Bool) async {
         var delay = 1.0
-        var everConnected = false
+        var everConnected = persistent
         while !Task.isCancelled {
             do {
                 try await loadConfig()
@@ -117,7 +142,7 @@ final class DeckConnection {
             } catch {
                 if Task.isCancelled { return }
                 if let deckError = error as? DeckError, deckError.isFatal {
-                    fail(deckError.errorDescription ?? "Bağlanılamadı.")
+                    fail(deckError.errorDescription ?? "Bağlanılamadı.", fatal: true)
                     return
                 }
                 if !everConnected {
@@ -131,14 +156,15 @@ final class DeckConnection {
         }
     }
 
-    private func fail(_ message: String) {
+    private func fail(_ message: String, fatal: Bool = false) {
+        self.fatal = fatal
         config = nil
         state = .failed(message)
     }
 
     private func remember() {
         UserDefaults.standard.set(host, forKey: "deckHost")
-        Keychain.set(pin, for: "pin")
+        PinStore.save(pin)
     }
 
     private func ping(_ socket: URLSessionWebSocketTask) async throws {
@@ -167,8 +193,8 @@ final class DeckConnection {
         components(scheme: "http", path: path, items: items)
     }
 
-    func wsURL(_ path: String) -> URL? {
-        components(scheme: "ws", path: path, items: [])
+    func wsURL(_ path: String, items: [URLQueryItem] = []) -> URL? {
+        components(scheme: "ws", path: path, items: items)
     }
 
     // MARK: - REST

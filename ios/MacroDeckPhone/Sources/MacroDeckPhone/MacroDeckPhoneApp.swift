@@ -25,9 +25,17 @@ enum AppTab: Hashable {
 
 struct RootView: View {
     @Environment(DeckConnection.self) private var deck
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab: AppTab = .deck
 
     var body: some View {
+        content.onChange(of: scenePhase) { _, phase in
+            if phase == .active { deck.resume() }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if deck.config != nil {
             TabView(selection: $tab) {
                 DeckView()
@@ -45,6 +53,13 @@ struct RootView: View {
                 SettingsView()
                     .tabItem { Label("Ayarlar", systemImage: "gearshape.fill") }
                     .tag(AppTab.settings)
+            }
+        } else if deck.state == .reconnecting || deck.state == .connecting {
+            // kayıtlı PC'ye bağlanılıyor: PIN formunu gösterme
+            VStack(spacing: 16) {
+                ProgressView()
+                Text("PC'ye bağlanılıyor…").foregroundStyle(.secondary)
+                Button("Vazgeç") { deck.cancel() }.buttonStyle(.bordered)
             }
         } else {
             ConnectView()
@@ -101,7 +116,7 @@ struct ConnectView: View {
                 }
             }
             .navigationTitle("MacroDeck")
-            .onAppear { pin = Keychain.get("pin") ?? "" }
+            .onAppear { pin = PinStore.load() ?? "" }
         }
     }
 }

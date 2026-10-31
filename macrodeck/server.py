@@ -153,6 +153,7 @@ def create_app(
     # Gelen: telefondan yuklenenler, Giden: PC'den telefona sunulacaklar
     app.state.files_dir = Path.home() / "Downloads" / "MacroDeck"
     app.state.screen_grab = screen.grab_jpeg  # testlerde sahte
+    app.state.monitors = screen.monitors
     app.state.input_handler = remote_input.handle  # testlerde sahte ile degistirilir
     app.state.bridge_token = load_or_create_bridge_token(
         config_path.parent / "bridge_token.txt"
@@ -601,14 +602,22 @@ def create_app(
             return False
         return True
 
+    @app.get("/api/monitors")
+    def list_monitors(request: Request, token: str | None = None):
+        _require_auth(request, token)
+        return {"monitors": [
+            {"index": i, "width": r[2] - r[0], "height": r[3] - r[1], "primary": i == 0}
+            for i, r in enumerate(app.state.monitors())
+        ]}
+
     @app.websocket("/ws/screen")
-    async def screen_endpoint(websocket: WebSocket, token: str):
+    async def screen_endpoint(websocket: WebSocket, token: str, monitor: int = 0, width: int = screen.DEFAULT_WIDTH):
         if not await _admit(websocket, token):
             return
         await websocket.accept()
         try:
             while True:
-                frame = await asyncio.to_thread(app.state.screen_grab)
+                frame = await asyncio.to_thread(app.state.screen_grab, monitor, width)
                 await websocket.send_bytes(frame)
                 await asyncio.sleep(SCREEN_INTERVAL)
         except (WebSocketDisconnect, RuntimeError):

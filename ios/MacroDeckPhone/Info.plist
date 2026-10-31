@@ -12,5 +12,13 @@
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>PC'deki MacroDeck ile ev ağında konuşmak için gerekli.</string>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Fotoğraf ve videoları PC'ye göndermek için gerekli.</string>
 </dict>
 </plist>

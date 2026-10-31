@@ -63,7 +63,7 @@ def test_clipboard_pc_to_phone_on_connect_and_phone_to_pc(tmp_path):
 
 def test_screen_stream_sends_frames_and_rejects_bad_pin(tmp_path):
     client, _ = build_client(tmp_path)
-    client.app.state.screen_grab = lambda: b"jpegbytes"
+    client.app.state.screen_grab = lambda monitor=0, width=0: b"jpegbytes"
     with client.websocket_connect("/ws/screen?token=1234") as ws:
         assert ws.receive_bytes() == b"jpegbytes"
         assert ws.receive_bytes() == b"jpegbytes"
@@ -75,9 +75,27 @@ def test_screen_stream_sends_frames_and_rejects_bad_pin(tmp_path):
 
 
 def test_grab_jpeg_real_screen_is_jpeg():
-    from macrodeck.screen import grab_jpeg
-    data = grab_jpeg()
-    assert data[:2] == b"\xff\xd8" and len(data) < 400_000
+    from macrodeck.screen import grab_jpeg, monitors
+    assert len(monitors()) >= 1
+    for i in range(len(monitors())):
+        data = grab_jpeg(i, 800)
+        assert data[:2] == b"\xff\xd8" and len(data) < 400_000
+    assert grab_jpeg(99)[:2] == b"\xff\xd8"  # gecersiz indeks ana monitore duser
+
+
+def test_monitors_endpoint_and_stream_params(tmp_path):
+    client, _ = build_client(tmp_path)
+    client.app.state.monitors = lambda: [(0, 0, 1920, 1080), (1920, 0, 3840, 1200)]
+    got = []
+    client.app.state.screen_grab = lambda monitor=0, width=0: got.append((monitor, width)) or b"x"
+    assert client.get("/api/monitors?token=1234").json()["monitors"] == [
+        {"index": 0, "width": 1920, "height": 1080, "primary": True},
+        {"index": 1, "width": 1920, "height": 1200, "primary": False},
+    ]
+    assert client.get("/api/monitors?token=0000").status_code == 403
+    with client.websocket_connect("/ws/screen?token=1234&monitor=1&width=1600") as ws:
+        ws.receive_bytes()
+    assert got[0] == (1, 1600)
 
 
 def test_files_upload_list_download_and_traversal(tmp_path):
