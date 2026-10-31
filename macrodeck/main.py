@@ -78,7 +78,9 @@ def _run_server(app):
     # access_log=False: her HTTP/WS istegi icin log satiri basmaz (tray-resident
     # calisirken gereksiz I/O) - bizim kendi logger'larimiz (discord bridge, hata
     # loglari vb.) bundan etkilenmez, ayri logging.basicConfig ile yonetiliyor.
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning", access_log=False)
+    # ws_ping_timeout=None: iPhone (URLSessionWebSocketTask) sunucunun keepalive ping'ine pong donmuyor,
+    # uvicorn varsayilani 20 sn sonra baglantiyi 1011 ile kapatiyordu. Telefon kendi ping'ini atiyor.
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning", access_log=False, ws_ping_timeout=None)
 
 
 class AppLifecycle:

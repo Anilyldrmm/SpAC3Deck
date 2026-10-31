@@ -74,7 +74,7 @@ struct ConnectionBanner: View {
 
     var body: some View {
         if deck.state == .reconnecting {
-            Label("Bağlantı koptu, yeniden bağlanılıyor…", systemImage: "wifi.exclamationmark")
+            Label("Bağlantı koptu, yeniden bağlanılıyor… " + (deck.lastDisconnect ?? ""), systemImage: "wifi.exclamationmark")
                 .font(.footnote.weight(.medium))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
