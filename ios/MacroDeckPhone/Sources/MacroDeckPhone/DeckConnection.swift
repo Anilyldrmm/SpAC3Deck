@@ -6,6 +6,7 @@ enum DeckError: LocalizedError {
     case badPIN
     case tooManyAttempts
     case unreachable
+    case network(String)
     case server(Int)
 
     var errorDescription: String? {
@@ -13,6 +14,7 @@ enum DeckError: LocalizedError {
         case .badPIN: return "PIN yanlış."
         case .tooManyAttempts: return "Çok fazla deneme. Biraz bekleyip tekrar dene."
         case .unreachable: return "PC'ye ulaşılamıyor. MacroDeck'in açık olduğunu ve adresi kontrol et."
+        case .network(let detail): return "PC'ye ulaşılamıyor (\(detail)). MacroDeck açık mı, adres doğru mu, yerel ağ izni verili mi?"
         case .server(let code): return "Sunucu hata verdi (\(code))."
         }
     }
@@ -145,7 +147,8 @@ final class DeckConnection {
                 if Task.isCancelled { return }
                 let nsError = error as NSError
                 NSLog("MacroDeck baglanti koptu: %@ %ld %@", nsError.domain, nsError.code, nsError.localizedDescription)
-                lastDisconnect = "\(Date().formatted(date: .omitted, time: .standard)) · \(nsError.domain) \(nsError.code)"
+                let detail = (error as? DeckError)?.errorDescription ?? "\(nsError.domain) \(nsError.code)"
+                lastDisconnect = "\(Date().formatted(date: .omitted, time: .standard)) · \(detail)"
                 if let deckError = error as? DeckError, deckError.isFatal {
                     fail(deckError.errorDescription ?? "Bağlanılamadı.", fatal: true)
                     return
@@ -212,7 +215,8 @@ final class DeckConnection {
             (data, response) = try await rest.data(from: url)
         } catch {
             if Task.isCancelled { throw CancellationError() }
-            throw DeckError.unreachable
+            let nsError = error as NSError
+            throw DeckError.network("\(nsError.domain) \(nsError.code)")
         }
         switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
         case 200: break

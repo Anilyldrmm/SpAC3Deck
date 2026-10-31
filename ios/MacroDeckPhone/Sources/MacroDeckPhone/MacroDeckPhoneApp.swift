@@ -75,6 +75,10 @@ struct RootView: View {
                 ProgressView().controlSize(.large)
                 Text("PC'ye bağlanılıyor…").font(.headline)
                 Text(deck.host).font(.subheadline).foregroundStyle(.secondary)
+                if let last = deck.lastDisconnect {
+                    Text(last).font(.footnote).foregroundStyle(.orange)
+                        .multilineTextAlignment(.center).padding(.horizontal, 24)
+                }
                 Button("Vazgeç") { deck.cancel() }.buttonStyle(.bordered)
             }
         } else {
@@ -181,7 +185,7 @@ struct ConnectView: View {
 
                 Button {
                     focus = nil
-                    deck.connect(host: host, pin: pin)
+                    deck.connect(host: host, pin: pin, persistent: true)
                 } label: {
                     HStack {
                         if busy { ProgressView().tint(.white) }
