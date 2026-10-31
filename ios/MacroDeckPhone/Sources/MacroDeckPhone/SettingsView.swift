@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(DeckConnection.self) private var deck
     @AppStorage("padSpeed") private var speed = 1.6
     @AppStorage("naturalScroll") private var natural = true
+    @AppStorage("autoLandscape") private var autoLandscape = true
     @State private var confirmDisconnect = false
 
     var body: some View {
@@ -33,6 +34,7 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("Doğal kaydırma", isOn: $natural)
+                    Toggle("PC ekranı açılınca yatay çevir", isOn: $autoLandscape)
                 } header: {
                     Text("İz pedi")
                 } footer: {

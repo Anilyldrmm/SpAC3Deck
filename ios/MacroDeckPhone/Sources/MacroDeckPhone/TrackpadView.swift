@@ -1,18 +1,41 @@
 import SwiftUI
 import UIKit
 
+/// Ekran yönü: PC ekranı yatay olduğu için izlerken otomatik yatay, düğmeyle de çevrilebilir.
+enum Orientation {
+    private static var scene: UIWindowScene? { UIApplication.shared.connectedScenes.first as? UIWindowScene }
+
+    static var isLandscape: Bool { scene?.interfaceOrientation.isLandscape ?? false }
+
+    static func request(_ mask: UIInterfaceOrientationMask) {
+        scene?.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+    }
+
+    static func toggle() {
+        request(isLandscape ? .portrait : .landscape)
+    }
+
+    /// Zorlamayı bırak: telefonun kendi döndürmesine dön.
+    static func release() { request(.allButUpsideDown) }
+}
+
 /// Tam ekran iz pedi: tüm yüzey jest alanı. Düğme yok; üstte yalnızca küçük bir çubuk var.
 struct TrackpadView: View {
     @Environment(DeckConnection.self) private var deck
     @AppStorage("padSpeed") private var speed = 1.6
     @AppStorage("naturalScroll") private var natural = true
+    @AppStorage("autoLandscape") private var autoLandscape = true
     @State private var stream = ScreenStream()
     @State private var showScreen = false
     @State private var showKeyboard = false
     @State private var showHelp = false
     @State private var fullscreen = false
+    @State private var hint: String?
     @State private var monitors: [PCMonitor] = []
     @State private var monitor = 0
+    @State private var zoom: CGFloat = 1
+    @State private var pan: CGSize = .zero
+    @State private var area: CGSize = .zero
     let onClose: () -> Void
 
     var body: some View {
@@ -22,7 +45,10 @@ struct TrackpadView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .opacity(0.9)
+                    .frame(width: area.width, height: area.height)
+                    .scaleEffect(zoom)
+                    .offset(pan)
+                    .opacity(0.95)
                     .ignoresSafeArea()
             } else if !showScreen {
                 Text("İz pedi")
@@ -30,14 +56,34 @@ struct TrackpadView: View {
                     .foregroundStyle(.white.opacity(0.18))
                     .accessibilityHidden(true)
             }
-            PadSurface(deck: deck, speed: speed, natural: natural)
-                .ignoresSafeArea()
+            PadSurface(
+                deck: deck, speed: speed, natural: natural,
+                onZoom: applyZoom,
+                onExitFullscreen: { if fullscreen { fullscreen = false } }
+            )
+            .ignoresSafeArea()
             KeyCapture(deck: deck, active: $showKeyboard)
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
                 .accessibilityHidden(true)
         }
-        .overlay(alignment: .top) { fullscreen ? AnyView(handle) : AnyView(topBar) }
+        .background(GeometryReader { geo in
+            Color.clear
+                .onAppear { area = geo.size }
+                .onChange(of: geo.size) { _, size in area = size; clampPan() }
+        })
+        .overlay(alignment: .top) { if !fullscreen { topBar } }
+        .overlay(alignment: .bottom) {
+            if let hint {
+                Text(hint)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.bottom, 28)
+                    .transition(.opacity)
+            }
+        }
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(true)
         .persistentSystemOverlays(fullscreen ? .hidden : .automatic)
@@ -48,23 +94,75 @@ struct TrackpadView: View {
             showScreen = false
             showKeyboard = false
             fullscreen = false
+            resetZoom()
+            Orientation.release()
         }
         .onChange(of: showScreen) { _, on in
-            if on { Task { await loadMonitors() }; restartStream() } else { stream.stop() }
+            if on {
+                if autoLandscape { Orientation.request(.landscape) }
+                Task { await loadMonitors() }
+                restartStream()
+            } else {
+                stream.stop()
+                resetZoom()
+                if autoLandscape { Orientation.release() }
+            }
         }
         .onChange(of: monitor) { _, _ in restartStream() }
-        .onChange(of: fullscreen) { _, _ in restartStream() } // tam ekranda daha keskin kare
+        .onChange(of: fullscreen) { _, on in
+            restartStream() // tam ekranda daha keskin kare
+            if on { flash("Çıkmak için dört parmakla dokun") }
+        }
         .sheet(isPresented: $showHelp) { PadHelp() }
     }
+
+    // MARK: Yakınlaştırma
+
+    private func applyZoom(_ factor: CGFloat, _ move: CGSize) {
+        zoom = min(5, max(1, zoom * factor))
+        pan = zoom > 1 ? CGSize(width: pan.width + move.width, height: pan.height + move.height) : .zero
+        clampPan()
+    }
+
+    private func clampPan() {
+        let limitX = (zoom - 1) * area.width / 2
+        let limitY = (zoom - 1) * area.height / 2
+        pan = CGSize(width: min(limitX, max(-limitX, pan.width)), height: min(limitY, max(-limitY, pan.height)))
+    }
+
+    private func resetZoom() {
+        withAnimation(.easeOut(duration: 0.2)) { zoom = 1; pan = .zero }
+    }
+
+    private func flash(_ text: String) {
+        withAnimation { hint = text }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            withAnimation { hint = nil }
+        }
+    }
+
+    // MARK: Üst çubuk
 
     private var topBar: some View {
         HStack(spacing: 6) {
             barButton("xmark", label: "Kapat", action: onClose)
             Spacer()
+            if zoom > 1.01 {
+                Button { resetZoom() } label: {
+                    Text(String(format: "%.1f×", zoom))
+                        .font(.system(size: 14, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).frame(height: 44)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .accessibilityLabel("Yakınlaştırmayı sıfırla")
+            }
             if showScreen {
                 if monitors.count > 1 { monitorMenu }
                 barButton("arrow.up.left.and.arrow.down.right", label: "Tam ekran") { fullscreen = true }
             }
+            barButton("rotate.right", label: "Ekranı çevir") { Orientation.toggle() }
             barButton("display", label: showScreen ? "Ekranı gizle" : "PC ekranını göster", on: showScreen) {
                 showScreen.toggle()
             }
@@ -75,19 +173,6 @@ struct TrackpadView: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
-    }
-
-    /// Tam ekranda tek küçük tutamaç kalır; dokununca çubuk geri gelir.
-    private var handle: some View {
-        Button { fullscreen = false } label: {
-            Image(systemName: "arrow.down.right.and.arrow.up.left")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial.opacity(0.6), in: Circle())
-        }
-        .accessibilityLabel("Tam ekrandan çık")
-        .padding(.top, 4)
     }
 
     private var monitorMenu: some View {
@@ -159,6 +244,8 @@ private struct PadHelp: View {
         ("circle.grid.3x3", "Üç parmakla dokun", "Orta tık"),
         ("arrow.up.and.down", "İki parmak sürükle", "Kaydır"),
         ("hand.draw", "Dokun, hemen bas ve sürükle", "Tutup sürükle (pencere taşı, metin seç)"),
+        ("arrow.up.left.and.arrow.down.right", "İki parmakla aç / kıs", "PC ekranını yakınlaştır, kaydırarak gez"),
+        ("hand.raised.fingers.spread", "Dört parmakla dokun", "Tam ekrandan çık"),
     ]
 
     var body: some View {
@@ -187,6 +274,8 @@ struct PadSurface: UIViewRepresentable {
     let deck: DeckConnection
     let speed: Double
     let natural: Bool
+    var onZoom: (CGFloat, CGSize) -> Void = { _, _ in }
+    var onExitFullscreen: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -206,6 +295,11 @@ struct PadSurface: UIViewRepresentable {
         _ = tap(1, #selector(Coordinator.leftTap))
         _ = tap(2, #selector(Coordinator.rightTap))
         _ = tap(3, #selector(Coordinator.middleTap))
+        _ = tap(4, #selector(Coordinator.fourTap))
+
+        let pinch = UIPinchGestureRecognizer(target: c, action: #selector(Coordinator.pinch(_:)))
+        pinch.delegate = c
+        view.addGestureRecognizer(pinch)
 
         let move = UIPanGestureRecognizer(target: c, action: #selector(Coordinator.move(_:)))
         move.minimumNumberOfTouches = 1
@@ -234,12 +328,17 @@ struct PadSurface: UIViewRepresentable {
         c.deck = deck
         c.speed = speed
         c.natural = natural
+        c.onZoom = onZoom
+        c.onExitFullscreen = onExitFullscreen
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var deck: DeckConnection?
         var speed = 1.6
         var natural = true
+        var onZoom: (CGFloat, CGSize) -> Void = { _, _ in }
+        var onExitFullscreen: () -> Void = {}
+        private var lastPinchCenter = CGPoint.zero
         private var dragging = false
         private var dragEnded = Date.distantPast
         private var scrollRemainder = 0.0
@@ -261,6 +360,22 @@ struct PadSurface: UIViewRepresentable {
 
         @MainActor @objc func rightTap() { light.impactOccurred(); deck?.click("right") }
         @MainActor @objc func middleTap() { light.impactOccurred(); deck?.click("middle") }
+        @MainActor @objc func fourTap() { heavy.impactOccurred(); onExitFullscreen() }
+
+        /// İki parmakla aç/kıs: yakınlaştır; parmakların ortası kayarsa görüntü de kayar.
+        @MainActor @objc func pinch(_ g: UIPinchGestureRecognizer) {
+            guard let view = g.view else { return }
+            let center = g.location(in: view)
+            switch g.state {
+            case .began:
+                lastPinchCenter = center
+            case .changed:
+                onZoom(g.scale, CGSize(width: center.x - lastPinchCenter.x, height: center.y - lastPinchCenter.y))
+                g.scale = 1
+                lastPinchCenter = center
+            default: break
+            }
+        }
 
         @MainActor @objc func move(_ g: UIPanGestureRecognizer) {
             guard let view = g.view else { return }

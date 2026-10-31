@@ -43,7 +43,16 @@ struct DeckView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Deck")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 6) {
+                        Circle().fill(deck.state == .connected ? Brand.accent : .orange).frame(width: 8, height: 8)
+                        Text(deck.host).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
             .safeAreaInset(edge: .top) { ConnectionBanner() }
         }
     }
@@ -212,7 +221,12 @@ struct ButtonTile: View {
         }
         .padding(6)
         .frame(width: side, height: side)
-        .background(isOn ? Brand.accent : Color(.secondarySystemGroupedBackground), in: tileShape)
+        .background {
+            tileShape.fill(isOn ? AnyShapeStyle(Brand.accentGradient) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)))
+        }
+        .overlay { tileShape.strokeBorder(Color.primary.opacity(isOn ? 0 : 0.07), lineWidth: 1) }
+        .shadow(color: isOn ? Brand.accent.opacity(0.35) : .black.opacity(0.08), radius: isOn ? 10 : 5, y: 3)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isOn)
     }
 
     private var imageFace: some View {

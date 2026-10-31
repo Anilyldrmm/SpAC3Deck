@@ -629,7 +629,7 @@ function makeSoundField(params, setParam) {
   const uploadBtn = document.createElement("button");
   uploadBtn.type = "button";
   uploadBtn.className = "upload-icon-btn";
-  uploadBtn.textContent = "🎵 Ses Dosyası Yükle (WAV)";
+  uploadBtn.textContent = "Ses Dosyası Yükle (WAV)";
 
   const fileInput = document.createElement("input");
   fileInput.type = "file";
@@ -777,7 +777,7 @@ function makeIconField(button) {
   const uploadBtn = document.createElement("button");
   uploadBtn.type = "button";
   uploadBtn.className = "upload-icon-btn";
-  uploadBtn.textContent = "🖼️ Özel Görsel Yükle";
+  uploadBtn.textContent = "Özel Görsel Yükle";
 
   const fileInput = document.createElement("input");
   fileInput.type = "file";
@@ -804,7 +804,7 @@ function makeIconField(button) {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "upload-icon-btn";
-    removeBtn.textContent = "🗑️ Özel Görseli Kaldır";
+    removeBtn.textContent = "Özel Görseli Kaldır";
     removeBtn.addEventListener("click", () => {
       button.icon = ACTION_DEFS[button.action]?.icon || ICON_CHOICES[0];
       renderGrid();
