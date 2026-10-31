@@ -1674,6 +1674,12 @@ async function sendDropped(files) {
   refreshFiles();
 }
 
+window.addEventListener("pywebviewready", () => {
+  const btn = document.getElementById("open-inbox");
+  btn.hidden = false;
+  btn.addEventListener("click", () => window.pywebview.api.open_files_folder("Gelen"));
+});
+
 document.getElementById("files-toggle").addEventListener("click", () => {
   const popover = document.getElementById("files-popover");
   closeOtherPopovers("files-popover");

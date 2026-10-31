@@ -620,7 +620,7 @@ def create_app(
         clip = app.state.clipboard
         last_seq = None
         while True:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.15)
             if not app.state.manager.active:
                 continue
             seq = clip.clipboard_seq()

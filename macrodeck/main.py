@@ -106,6 +106,14 @@ class _WindowControls:
     def close(self):
         self._window.destroy()
 
+    def open_files_folder(self, which="Gelen"):
+        """Telefondan gelen dosyalarin klasorunu Gezgin'de acar."""
+        import os
+
+        folder = app_data_dir() / "files" / ("Giden" if which == "Giden" else "Gelen")
+        folder.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(folder))
+
     def pick_file(self):
         """Dosya gezgini: secilen yolu dondurur (iptalde None)."""
         import webview

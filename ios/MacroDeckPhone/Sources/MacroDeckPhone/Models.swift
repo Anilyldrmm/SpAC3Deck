@@ -57,6 +57,12 @@ enum JSONValue: Codable, Equatable {
     }
 }
 
+struct ClipEntry: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    let date: Date
+}
+
 struct DeckConfig: Codable, Equatable {
     var pages: [Page]
     var gridColumns: Int

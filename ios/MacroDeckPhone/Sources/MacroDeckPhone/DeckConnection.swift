@@ -45,6 +45,8 @@ final class DeckConnection {
     /// Voicemeeter / Discord canlı durumu (strip0_mute, discord_camera, ...).
     var values: [String: JSONValue] = [:]
     var pcClipboard = ""
+    /// PC'de kopyalananların son 20'si (en yeni başta); Pano sekmesinde dokunup kopyalanır.
+    var clipHistory: [ClipEntry] = []
     var serverVersion: String?
     /// Son bağlantı kopmasının saati ve nedeni (Ayarlar'da görünür; kopma teşhisi için).
     var lastDisconnect: String?
@@ -265,6 +267,10 @@ final class DeckConnection {
         case "clipboard":
             guard let clip = object["text"] as? String else { return }
             pcClipboard = clip
+            if !clip.isEmpty, clipHistory.first?.text != clip {
+                clipHistory.insert(ClipEntry(text: clip, date: Date()), at: 0)
+                if clipHistory.count > 20 { clipHistory.removeLast() }
+            }
             if UserDefaults.standard.bool(forKey: "autoCopy") { UIPasteboard.general.string = clip }
         case "reload":
             Task { try? await loadConfig() }
