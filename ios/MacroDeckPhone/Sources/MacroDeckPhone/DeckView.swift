@@ -185,6 +185,9 @@ struct ButtonTile: View {
             }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: taps)
+        // yayın sesi yalnızca ekran paylaşımı açıkken anlamlı (web arayüzüyle aynı)
+        .disabled(button.action == "discord_stream_sound" && !(deck.values["discord_streaming"]?.isOn ?? false))
+        .opacity(button.action == "discord_stream_sound" && !(deck.values["discord_streaming"]?.isOn ?? false) ? 0.45 : 1)
         .accessibilityLabel(button.label)
         .accessibilityValue(stateText ?? "")
     }
