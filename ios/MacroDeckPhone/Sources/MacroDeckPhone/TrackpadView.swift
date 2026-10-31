@@ -25,6 +25,7 @@ struct TrackpadView: View {
     @AppStorage("padSpeed") private var speed = 1.6
     @AppStorage("naturalScroll") private var natural = true
     @AppStorage("autoLandscape") private var autoLandscape = true
+    @AppStorage("padFill") private var fill = false
     @State private var stream = ScreenStream()
     @State private var showScreen = false
     @State private var showKeyboard = false
@@ -40,12 +41,19 @@ struct TrackpadView: View {
 
     var body: some View {
         ZStack {
+            // tüm ekranı (güvenli alanlar dahil) ölç: döndürmede ve tam ekranda boşluk kalmasın
             Color.black.ignoresSafeArea()
+                .overlay(GeometryReader { geo in
+                    Color.clear
+                        .onAppear { area = geo.size }
+                        .onChange(of: geo.size) { _, size in area = size; clampPan() }
+                })
             if showScreen, let image = stream.image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
-                    .frame(width: area.width, height: area.height)
+                    .aspectRatio(contentMode: fill ? .fill : .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .scaleEffect(zoom)
                     .offset(pan)
                     .opacity(0.95)
@@ -67,11 +75,6 @@ struct TrackpadView: View {
                 .opacity(0.01)
                 .accessibilityHidden(true)
         }
-        .background(GeometryReader { geo in
-            Color.clear
-                .onAppear { area = geo.size }
-                .onChange(of: geo.size) { _, size in area = size; clampPan() }
-        })
         .overlay(alignment: .top) { if !fullscreen { topBar } }
         .overlay(alignment: .bottom) {
             if let hint {
@@ -160,6 +163,7 @@ struct TrackpadView: View {
             }
             if showScreen {
                 if monitors.count > 1 { monitorMenu }
+                barButton("rectangle.arrowtriangle.2.outward", label: fill ? "Sığdır" : "Ekranı doldur", on: fill) { fill.toggle() }
                 barButton("arrow.up.left.and.arrow.down.right", label: "Tam ekran") { fullscreen = true }
             }
             barButton("rotate.right", label: "Ekranı çevir") { Orientation.toggle() }
