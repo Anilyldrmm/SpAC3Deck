@@ -128,12 +128,18 @@ final class DeckConnection {
                 let socket = wsSession.webSocketTask(with: url)
                 self.socket = socket
                 socket.resume()
-                try await ping(socket)
-                remember()
-                state = .connected
-                everConnected = true
-                delay = 1
-                Task { await loadVersion() }
+                linked = false
+                // URLSessionWebSocketTask pong/ping çerçevelerini yalnızca bekleyen bir receive() varken işler.
+                // Ping'i beklemeden önce receive döngüsü çalışmalı; yoksa "bağlanıyor"da takılır, sunucunun
+                // ping'lerine de cevap verilmez ve bağlantı bir süre sonra kopar.
+                Task {
+                    do {
+                        try await ping(socket)
+                        markConnected()
+                    } catch {
+                        socket.cancel(with: .goingAway, reason: nil)
+                    }
+                }
                 // iOS boşta kalan WebSocket'i kapatabiliyor; sunucu sessiz olduğu için ping at
                 let keepAlive = Task {
                     while !Task.isCancelled {
@@ -145,6 +151,7 @@ final class DeckConnection {
                 while true { handle(try await socket.receive()) }
             } catch {
                 if Task.isCancelled { return }
+                if linked { everConnected = true; delay = 1 }
                 let nsError = error as NSError
                 NSLog("MacroDeck baglanti koptu: %@ %ld %@", nsError.domain, nsError.code, nsError.localizedDescription)
                 let detail = (error as? DeckError)?.errorDescription ?? "\(nsError.domain) \(nsError.code)"
@@ -162,6 +169,15 @@ final class DeckConnection {
                 delay = min(delay * 2, 8)
             }
         }
+    }
+
+    private var linked = false // bu denemede ping'e pong döndü
+
+    private func markConnected() {
+        linked = true
+        remember()
+        state = .connected
+        Task { await loadVersion() }
     }
 
     private func fail(_ message: String, fatal: Bool = false) {
