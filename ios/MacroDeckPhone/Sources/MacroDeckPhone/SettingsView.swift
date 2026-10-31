@@ -15,6 +15,9 @@ struct SettingsView: View {
                     if let version = deck.serverVersion {
                         LabeledContent("MacroDeck sürümü", value: version)
                     }
+                    if let last = deck.lastDisconnect {
+                        LabeledContent("Son kopma", value: last)
+                    }
                     Button("Bağlantıyı kes", role: .destructive) { confirmDisconnect = true }
                 }
 

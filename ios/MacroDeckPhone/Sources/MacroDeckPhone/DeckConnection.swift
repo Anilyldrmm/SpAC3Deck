@@ -44,6 +44,8 @@ final class DeckConnection {
     var values: [String: JSONValue] = [:]
     var pcClipboard = ""
     var serverVersion: String?
+    /// Son bağlantı kopmasının saati ve nedeni (Ayarlar'da görünür; kopma teşhisi için).
+    var lastDisconnect: String?
     private(set) var host = ""
 
     private var pin = ""
@@ -141,6 +143,9 @@ final class DeckConnection {
                 while true { handle(try await socket.receive()) }
             } catch {
                 if Task.isCancelled { return }
+                let nsError = error as NSError
+                NSLog("MacroDeck baglanti koptu: %@ %ld %@", nsError.domain, nsError.code, nsError.localizedDescription)
+                lastDisconnect = "\(Date().formatted(date: .omitted, time: .standard)) · \(nsError.domain) \(nsError.code)"
                 if let deckError = error as? DeckError, deckError.isFatal {
                     fail(deckError.errorDescription ?? "Bağlanılamadı.", fatal: true)
                     return

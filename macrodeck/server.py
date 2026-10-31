@@ -34,7 +34,6 @@ from .ws import ConnectionManager
 
 DEFAULT_PORT = 8765
 CLIPBOARD_MAX = 100_000
-SCREEN_INTERVAL = 0.03  # kareler arasi bekleme; yakalama suresi ustune biner
 
 AUTH_OK = "ok"
 AUTH_BAD_ORIGIN = "bad_origin"
@@ -615,13 +614,16 @@ def create_app(
         if not await _admit(websocket, token):
             return
         await websocket.accept()
+        screen.stream_open()
         try:
             while True:
                 frame = await asyncio.to_thread(app.state.screen_grab, monitor, width)
                 await websocket.send_bytes(frame)
-                await asyncio.sleep(SCREEN_INTERVAL)
+                await asyncio.sleep(0)  # hiz yakalamadan gelir (dxgi 60 fps)
         except (WebSocketDisconnect, RuntimeError):
             pass
+        finally:
+            screen.stream_close()
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket, token: str):

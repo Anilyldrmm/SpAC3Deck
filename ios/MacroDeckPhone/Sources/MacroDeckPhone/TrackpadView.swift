@@ -410,7 +410,11 @@ final class ScreenStream {
         task = Task {
             while !Task.isCancelled {
                 guard let message = try? await socket.receive() else { break }
-                if case .data(let data) = message, let frame = UIImage(data: data) { image = frame }
+                if case .data(let data) = message {
+                    // 60 fps'te çözme ana iş parçacığını yormasın
+                    let frame = await Task.detached(priority: .userInitiated) { UIImage(data: data)?.preparingForDisplay() }.value
+                    if let frame { image = frame }
+                }
             }
         }
     }
