@@ -118,3 +118,72 @@ def type_text(text: str) -> None:
 
 def press_key(name: str) -> None:
     keyboard.send(name)
+
+
+# --- pano (telefon <-> PC senkronu): ctypes, yalnizca metin ---
+import time
+
+_CF_UNICODETEXT = 13
+_u32 = ctypes.WinDLL("user32")
+_k32 = ctypes.WinDLL("kernel32")
+_u32.OpenClipboard.argtypes = [ctypes.c_void_p]
+_u32.GetClipboardData.argtypes = [wintypes.UINT]
+_u32.GetClipboardData.restype = ctypes.c_void_p
+_u32.SetClipboardData.argtypes = [wintypes.UINT, ctypes.c_void_p]
+_u32.SetClipboardData.restype = ctypes.c_void_p
+_u32.GetClipboardSequenceNumber.restype = wintypes.DWORD
+_k32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+_k32.GlobalAlloc.restype = ctypes.c_void_p
+_k32.GlobalLock.argtypes = [ctypes.c_void_p]
+_k32.GlobalLock.restype = ctypes.c_void_p
+_k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+_k32.GlobalFree.argtypes = [ctypes.c_void_p]
+
+
+def _open_clipboard() -> bool:
+    for _ in range(5):  # baska uygulama panoyu tutuyor olabilir
+        if _u32.OpenClipboard(None):
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def clipboard_seq() -> int:
+    return _u32.GetClipboardSequenceNumber()
+
+
+def get_clipboard_text() -> str | None:
+    """Pano metni; metin yoksa "", pano mesgulse None."""
+    if not _open_clipboard():
+        return None
+    try:
+        handle = _u32.GetClipboardData(_CF_UNICODETEXT)
+        if not handle:
+            return ""
+        ptr = _k32.GlobalLock(handle)
+        if not ptr:
+            return ""
+        try:
+            return ctypes.wstring_at(ptr)
+        finally:
+            _k32.GlobalUnlock(handle)
+    finally:
+        _u32.CloseClipboard()
+
+
+def set_clipboard_text(text: str) -> None:
+    data = (text + "\0").encode("utf-16-le")
+    handle = _k32.GlobalAlloc(0x0002, len(data))  # GMEM_MOVEABLE
+    ptr = _k32.GlobalLock(handle)
+    ctypes.memmove(ptr, data, len(data))
+    _k32.GlobalUnlock(handle)
+    if not _open_clipboard():
+        _k32.GlobalFree(handle)
+        raise OSError("pano acilamadi")
+    try:
+        _u32.EmptyClipboard()
+        if not _u32.SetClipboardData(_CF_UNICODETEXT, handle):
+            _k32.GlobalFree(handle)
+            raise OSError("pano yazilamadi")
+    finally:
+        _u32.CloseClipboard()

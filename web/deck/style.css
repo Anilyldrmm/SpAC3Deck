@@ -327,3 +327,56 @@ body {
 #pad-keys button { padding: 0 12px; }
 #pad-clicks button { flex: 1; }
 #pad-input { flex: 1; min-width: 0; padding: 0 12px; user-select: text; font-size: 16px; }
+
+/* --- Pano --- */
+#clip-toggle {
+  position: fixed;
+  right: calc(max(env(safe-area-inset-right), 12px) + 56px + 98px);
+  bottom: max(env(safe-area-inset-bottom), 12px);
+  z-index: 1000;
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 22px;
+  background: rgba(30, 30, 30, 0.85);
+  color: #eee;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+#clip-toggle:active { background: #2a2a2a; }
+#clip {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: max(env(safe-area-inset-top), 12px) max(env(safe-area-inset-right), 12px)
+    max(env(safe-area-inset-bottom), 12px) max(env(safe-area-inset-left), 12px);
+  background: #111;
+}
+#clip label { color: #888; font-size: 12px; }
+#clip textarea {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: #1a1a1a;
+  color: #eee;
+  font-size: 16px;
+  resize: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+#clip button {
+  min-height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: #242424;
+  color: #eee;
+  font-size: 15px;
+}
+#clip button:active { background: #333; }

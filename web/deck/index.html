@@ -31,6 +31,16 @@
     <main id="button-grid"></main>
   </div>
   <button id="rotate-toggle" hidden aria-label="Ekranı döndür">⟳</button>
+  <button id="clip-toggle" hidden aria-label="Pano">PANO</button>
+  <div id="clip" hidden>
+    <label for="clip-pc">PC panosu</label>
+    <textarea id="clip-pc" placeholder="PC'de kopyaladığın metin burada görünür"></textarea>
+    <button id="clip-copy">Telefona kopyala</button>
+    <label for="clip-phone">Telefondan PC'ye</label>
+    <textarea id="clip-phone" placeholder="Buraya yapıştır veya yaz"></textarea>
+    <button id="clip-send">PC'ye gönder</button>
+    <button id="clip-close">Kapat</button>
+  </div>
   <button id="pad-toggle" hidden aria-label="İz pedi">İZ PEDİ</button>
   <div id="pad" hidden>
     <div id="pad-surface"><span>Tek parmak: imleç &middot; dokun: tık<br>İki parmak: kaydır &middot; iki parmakla dokun: sağ tık</span></div>

@@ -49,6 +49,7 @@ const gridEl = document.getElementById("button-grid");
 const connBanner = document.getElementById("conn-banner");
 const rotateToggle = document.getElementById("rotate-toggle");
 const padToggle = document.getElementById("pad-toggle");
+const clipToggle = document.getElementById("clip-toggle");
 
 let config = null;
 let currentPage = 0;
@@ -206,6 +207,7 @@ async function connectWithPin(pin) {
   deckEl.hidden = false;
   rotateToggle.hidden = false;
   padToggle.hidden = false;
+  clipToggle.hidden = false;
   setConnected(false);
   try {
     renderTabs();
@@ -465,6 +467,8 @@ function openSocket(pin) {
     if (message.type === "state") {
       Object.assign(lastState, message.data);
       applyStateDiff(message.data);
+    } else if (message.type === "clipboard") {
+      clipPc.value = message.text;
     } else if (message.type === "reload") {
       reloadConfig();
     }
@@ -638,6 +642,46 @@ padInput.addEventListener("keydown", (e) => {
 
 padToggle.addEventListener("click", () => { padEl.hidden = false; });
 document.getElementById("pad-close").addEventListener("click", () => { padEl.hidden = true; });
+
+// --- Pano: PC panosu otomatik gelir, telefondan elle gonderilir ---
+// (HTTP'de navigator.clipboard yok: kopyalama icin secim + execCommand, yapistirma elle)
+const clipEl = document.getElementById("clip");
+const clipPc = document.getElementById("clip-pc");
+const clipPhone = document.getElementById("clip-phone");
+const clipCopyBtn = document.getElementById("clip-copy");
+const clipSendBtn = document.getElementById("clip-send");
+
+function flashLabel(btn, text) {
+  const old = btn.dataset.label || btn.textContent;
+  btn.dataset.label = old;
+  btn.textContent = text;
+  setTimeout(() => { btn.textContent = old; }, 1200);
+}
+
+clipCopyBtn.addEventListener("click", async () => {
+  const text = clipPc.value;
+  if (!text) return;
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    ok = true;
+  } catch (err) {
+    clipPc.focus();
+    clipPc.setSelectionRange(0, text.length);
+    ok = document.execCommand("copy");
+  }
+  flashLabel(clipCopyBtn, ok ? "Kopyalandı" : "Kopyalanamadı, elle seç");
+});
+
+clipSendBtn.addEventListener("click", () => {
+  const text = clipPhone.value;
+  if (!text) return;
+  sendInput({ type: "clipboard", text });
+  flashLabel(clipSendBtn, "Gönderildi");
+});
+
+clipToggle.addEventListener("click", () => { clipEl.hidden = false; });
+document.getElementById("clip-close").addEventListener("click", () => { clipEl.hidden = true; });
 
 pinSubmit.addEventListener("click", () => connectWithPin(pinInput.value.trim()));
 pinInput.addEventListener("keydown", (event) => {

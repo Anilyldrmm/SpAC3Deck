@@ -28,3 +28,29 @@ def test_ws_input_goes_to_handler_and_bad_input_keeps_socket(tmp_path):
         ws.send_json({"type": "input", "kind": "move", "dx": 1, "dy": 2})
         ws.send_json({"type": "input", "kind": "scroll", "dy": 1})
     assert [m["kind"] for m in got] == ["move", "scroll"]
+
+
+class FakeClip:
+    def __init__(self, text=""):
+        self.text, self.seq = text, 0
+
+    def clipboard_seq(self):
+        return self.seq
+
+    def get_clipboard_text(self):
+        return self.text
+
+    def set_clipboard_text(self, text):
+        self.text, self.seq = text, self.seq + 1
+
+
+def test_clipboard_pc_to_phone_on_connect_and_phone_to_pc(tmp_path):
+    client, _ = build_client(tmp_path)
+    clip = FakeClip("pcden gelen")
+    client.app.state.clipboard = clip
+    with client.websocket_connect("/ws?token=1234") as ws:
+        assert ws.receive_json() == {"type": "clipboard", "text": "pcden gelen"}
+        ws.send_json({"type": "clipboard", "text": "telefondan"})
+        ws.send_json({"type": "clipboard", "text": 5})  # gecersiz: yok sayilmali
+        ws.send_json({"type": "input", "kind": "scroll", "dy": 1})  # soket hala canli
+    assert clip.text == "telefondan"

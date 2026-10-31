@@ -21,7 +21,7 @@ from . import backups as backups_module
 from .config import DeckConfig, load_config, save_config
 from .discord_bridge import DiscordBridge, load_or_create_bridge_token
 from .paths import web_root as get_web_root
-from . import remote_input
+from . import os_bridge, remote_input
 from .qr import generate_deck_url, generate_qr_png
 from .security import AttemptLimiter, build_allowed_origins, origin_allowed
 from .sources import find_local_steam_image, list_monitors, list_steam_games
@@ -31,6 +31,7 @@ from .actions.registry import dispatch
 from .ws import ConnectionManager
 
 DEFAULT_PORT = 8765
+CLIPBOARD_MAX = 100_000
 
 AUTH_OK = "ok"
 AUTH_BAD_ORIGIN = "bad_origin"
@@ -144,6 +145,8 @@ def create_app(
         ["localhost", "127.0.0.1", lan_ip, deck_host], port
     )
     app.state.discord_bridge = DiscordBridge()
+    app.state.clipboard = os_bridge  # clipboard_seq/get_clipboard_text/set_clipboard_text; testlerde sahte
+    app.state.clipboard_last = ""
     app.state.input_handler = remote_input.handle  # testlerde sahte ile degistirilir
     app.state.bridge_token = load_or_create_bridge_token(
         config_path.parent / "bridge_token.txt"
@@ -512,9 +515,28 @@ def create_app(
                 app.state.last_voicemeeter_state.update(diff)
                 await app.state.manager.broadcast({"type": "state", "data": diff})
 
+    async def _poll_clipboard():
+        clip = app.state.clipboard
+        last_seq = None
+        while True:
+            await asyncio.sleep(0.5)
+            if not app.state.manager.active:
+                continue
+            seq = clip.clipboard_seq()
+            if seq == last_seq:
+                continue
+            text = clip.get_clipboard_text()
+            if text is None:  # pano mesgul, sonraki turda tekrar dene
+                continue
+            last_seq = seq
+            if text and text != app.state.clipboard_last:
+                app.state.clipboard_last = text
+                await app.state.manager.broadcast({"type": "clipboard", "text": text[:CLIPBOARD_MAX]})
+
     @app.on_event("startup")
     async def _start_poller():
         asyncio.create_task(_poll_voicemeeter())
+        asyncio.create_task(_poll_clipboard())
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket, token: str):
@@ -534,8 +556,26 @@ def create_app(
         if snapshot:
             await websocket.send_json({"type": "state", "data": snapshot})
         try:
+            current = app.state.clipboard.get_clipboard_text()
+            if current:
+                app.state.clipboard_last = current
+                await websocket.send_json({"type": "clipboard", "text": current[:CLIPBOARD_MAX]})
+        except Exception as e:
+            logger.debug(f"clipboard snapshot failed: {e}")
+        try:
             while True:
                 msg = await websocket.receive_json()
+
+                if isinstance(msg, dict) and msg.get("type") == "clipboard":
+                    text = msg.get("text")
+                    if isinstance(text, str) and text:
+                        text = text[:CLIPBOARD_MAX]
+                        app.state.clipboard_last = text  # poller geri yankilamasin
+                        try:
+                            app.state.clipboard.set_clipboard_text(text)
+                        except Exception as e:
+                            logger.error(f"clipboard write failed: {e}")
+                    continue
 
                 if isinstance(msg, dict) and msg.get("type") == "input":
                     try:
