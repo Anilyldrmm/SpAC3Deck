@@ -420,15 +420,19 @@ def create_app(
     _MAX_FILE_BYTES = 2 * 1024**3
 
     @app.post("/api/files/upload")
-    async def upload_file(request: Request, file: UploadFile, token: str | None = None):
+    async def upload_file(request: Request, name: str = "dosya", token: str | None = None):
+        # ham govde (multipart degil): PIN ve boyut, govde okunmadan ONCE kontrol edilir
         _require_auth(request, token)
+        declared = request.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > _MAX_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="dosya cok buyuk (max 2GB)")
         inbox = app.state.files_dir / "Gelen"
         inbox.mkdir(parents=True, exist_ok=True)
-        dest = unique_path(inbox, safe_name(file.filename))
+        dest = unique_path(inbox, safe_name(name))
         size = 0
         try:
             with dest.open("wb") as out:
-                while chunk := await file.read(1024 * 1024):
+                async for chunk in request.stream():
                     size += len(chunk)
                     if size > _MAX_FILE_BYTES:
                         raise HTTPException(status_code=413, detail="dosya cok buyuk (max 2GB)")

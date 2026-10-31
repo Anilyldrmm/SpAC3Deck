@@ -30,30 +30,73 @@
     <nav id="page-tabs"></nav>
     <main id="button-grid"></main>
   </div>
-  <button id="rotate-toggle" hidden aria-label="Ekranı döndür">⟳</button>
-  <button id="file-toggle" hidden aria-label="Dosya">DOSYA</button>
-  <div id="files" hidden>
+
+  <!-- Araclar menusu: tum ek ozellikler tek yerden acilir -->
+  <button id="menu-toggle" hidden aria-haspopup="dialog" aria-controls="menu">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
+    <span>Araçlar</span>
+  </button>
+  <div id="menu" hidden>
+    <div class="sheet" role="dialog" aria-label="Araçlar">
+      <h2>Araçlar</h2>
+      <div class="tiles">
+        <button id="pad-toggle" class="tile">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 15h18M12 15v4"/></svg>
+          <b>İz pedi</b><small>Telefon fare ve klavye olur, PC ekranını görürsün</small>
+        </button>
+        <button id="clip-toggle" class="tile">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V4a1 1 0 011-1h4a1 1 0 011 1v1M9 11h6M9 15h4"/></svg>
+          <b>Pano</b><small>Metni PC ile telefon arasında taşı</small>
+        </button>
+        <button id="file-toggle" class="tile">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M12 17v-5m0 0l-2 2m2-2l2 2"/></svg>
+          <b>Dosya</b><small>Fotoğraf ve dosya gönder veya indir</small>
+        </button>
+        <button id="rotate-toggle" class="tile">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v4h-4"/></svg>
+          <b>Ekranı döndür</b><small>Yatay ve dikey arasında değiştir</small>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <section id="files" class="screen" hidden aria-label="Dosya">
+    <header class="screen-head">
+      <h2>Dosya</h2>
+      <button id="file-close" class="close">Kapat</button>
+    </header>
     <label>Telefondan PC'ye</label>
     <input id="file-input" type="file" multiple hidden />
-    <button id="file-pick">Dosya seç ve gönder</button>
-    <div id="file-status"></div>
-    <label id="file-dir">PC'den telefona</label>
+    <button id="file-pick" class="primary">Dosya seç ve gönder</button>
+    <div id="file-status" aria-live="polite"></div>
+    <div class="row-head">
+      <label id="file-dir">PC'den telefona</label>
+      <button id="file-refresh" class="link">Yenile</button>
+    </div>
     <div id="file-list"></div>
-    <button id="file-refresh">Yenile</button>
-    <button id="file-close">Kapat</button>
-  </div>
-  <button id="clip-toggle" hidden aria-label="Pano">PANO</button>
-  <div id="clip" hidden>
+  </section>
+
+  <section id="clip" class="screen" hidden aria-label="Pano">
+    <header class="screen-head">
+      <h2>Pano</h2>
+      <button id="clip-close" class="close">Kapat</button>
+    </header>
     <label for="clip-pc">PC panosu</label>
     <textarea id="clip-pc" placeholder="PC'de kopyaladığın metin burada görünür"></textarea>
-    <button id="clip-copy">Telefona kopyala</button>
+    <button id="clip-copy" class="primary">Telefona kopyala</button>
     <label for="clip-phone">Telefondan PC'ye</label>
     <textarea id="clip-phone" placeholder="Buraya yapıştır veya yaz"></textarea>
-    <button id="clip-send">PC'ye gönder</button>
-    <button id="clip-close">Kapat</button>
-  </div>
-  <button id="pad-toggle" hidden aria-label="İz pedi">İZ PEDİ</button>
-  <div id="pad" hidden>
+    <button id="clip-send" class="primary">PC'ye gönder</button>
+  </section>
+
+  <section id="pad" class="screen" hidden aria-label="İz pedi">
+    <header class="screen-head">
+      <h2>İz pedi</h2>
+      <div class="head-actions">
+        <button id="pad-screen" class="chip">PC ekranını göster</button>
+        <button id="pad-close" class="close">Kapat</button>
+      </div>
+    </header>
     <div id="pad-surface"><span>Tek parmak: imleç &middot; dokun: tık<br>İki parmak: kaydır &middot; iki parmakla dokun: sağ tık</span></div>
     <div id="pad-keys">
       <input id="pad-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Yaz…" />
@@ -65,10 +108,8 @@
     <div id="pad-clicks">
       <button data-click="left">Sol tık</button>
       <button data-click="right">Sağ tık</button>
-      <button id="pad-screen">Ekran</button>
-      <button id="pad-close">Kapat</button>
     </div>
-  </div>
+  </section>
   <script src="app.js"></script>
 </body>
 </html>

@@ -48,6 +48,8 @@ const tabsEl = document.getElementById("page-tabs");
 const gridEl = document.getElementById("button-grid");
 const connBanner = document.getElementById("conn-banner");
 const rotateToggle = document.getElementById("rotate-toggle");
+const menuToggle = document.getElementById("menu-toggle");
+const menuEl = document.getElementById("menu");
 const padToggle = document.getElementById("pad-toggle");
 const clipToggle = document.getElementById("clip-toggle");
 const fileToggle = document.getElementById("file-toggle");
@@ -206,10 +208,7 @@ async function connectWithPin(pin) {
   safeStorageSet(PIN_STORAGE_KEY, pin);
   pinGate.hidden = true;
   deckEl.hidden = false;
-  rotateToggle.hidden = false;
-  padToggle.hidden = false;
-  clipToggle.hidden = false;
-  fileToggle.hidden = false;
+  menuToggle.hidden = false;
   setConnected(false);
   try {
     renderTabs();
@@ -655,6 +654,7 @@ function stopScreen() {
   padSurface.classList.remove("live");
   padSurface.style.backgroundImage = "";
   padScreenBtn.classList.remove("on");
+  padScreenBtn.textContent = "PC ekranını göster";
 }
 
 function startScreen() {
@@ -662,6 +662,7 @@ function startScreen() {
   const sock = new WebSocket(`${protocol}://${window.location.host}/ws/screen?token=${encodeURIComponent(currentPin)}`);
   screenSocket = sock;
   padScreenBtn.classList.add("on");
+  padScreenBtn.textContent = "Ekranı gizle";
   sock.addEventListener("message", (e) => {
     const next = URL.createObjectURL(new Blob([e.data], { type: "image/jpeg" }));
     padSurface.style.backgroundImage = `url(${next})`;
@@ -735,13 +736,11 @@ function formatSize(bytes) {
 function uploadOne(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `/api/files/upload?token=${encodeURIComponent(currentPin)}`);
+    xhr.open("POST", `/api/files/upload?token=${encodeURIComponent(currentPin)}&name=${encodeURIComponent(file.name)}`);
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
     xhr.onload = () => (xhr.status === 200 ? resolve(JSON.parse(xhr.responseText)) : reject(new Error(`hata ${xhr.status}`)));
     xhr.onerror = () => reject(new Error("bağlantı hatası"));
-    const form = new FormData();
-    form.append("file", file);
-    xhr.send(form);
+    xhr.send(file); // ham govde: sunucu PIN'i govdeyi okumadan once kontrol eder
   });
 }
 
@@ -798,6 +797,10 @@ document.getElementById("file-pick").addEventListener("click", () => fileInput.c
 document.getElementById("file-refresh").addEventListener("click", loadFileList);
 fileToggle.addEventListener("click", () => { filesEl.hidden = false; loadFileList(); });
 document.getElementById("file-close").addEventListener("click", () => { filesEl.hidden = true; });
+
+// --- Araclar menusu: arka plana veya bir karoya dokununca kapanir ---
+menuToggle.addEventListener("click", () => { menuEl.hidden = false; });
+menuEl.addEventListener("click", () => { menuEl.hidden = true; });
 
 pinSubmit.addEventListener("click", () => connectWithPin(pinInput.value.trim()));
 pinInput.addEventListener("keydown", (event) => {

@@ -80,13 +80,13 @@ def test_files_upload_list_download_and_traversal(tmp_path):
     client.app.state.files_dir = tmp_path / "dosyalar"
     q = "?token=1234"
 
-    r = client.post("/api/files/upload" + q, files={"file": ("..\\..\\evil:x.txt", b"merhaba")})
+    r = client.post("/api/files/upload" + q, params={"token": "1234", "name": "..\\..\\evil:x.txt"}, content=b"merhaba")
     assert r.status_code == 200
-    r2 = client.post("/api/files/upload" + q, files={"file": ("evil:x.txt", b"ikinci")})
+    r2 = client.post("/api/files/upload" + q, params={"token": "1234", "name": "evil:x.txt"}, content=b"ikinci")
     inbox = tmp_path / "dosyalar" / "Gelen"
     assert sorted(p.name for p in inbox.iterdir()) == ["evil_x (1).txt", "evil_x.txt"]
     assert (inbox / "evil_x.txt").read_bytes() == b"merhaba"
-    assert client.post("/api/files/upload?token=0000", files={"file": ("a.txt", b"x")}).status_code == 403
+    assert client.post("/api/files/upload?token=0000&name=a.txt", content=b"x").status_code == 403
 
     outbox = tmp_path / "dosyalar" / "Giden"
     outbox.mkdir(parents=True, exist_ok=True)
@@ -103,3 +103,14 @@ def test_safe_name_reserved_and_empty():
     assert safe_name("CON.txt") == "_CON.txt"
     assert safe_name("") == "dosya"
     assert safe_name("a/b\\c.png") == "c.png"
+
+
+def test_upload_rejects_oversize_before_reading_body(tmp_path, monkeypatch):
+    import macrodeck.server as srv
+    client, _ = build_client(tmp_path)
+    client.app.state.files_dir = tmp_path / "dosyalar"
+    # sinir cok kucuk app'te degil kodda sabit; Content-Length ile 2GB+ iddia et
+    r = client.post("/api/files/upload?token=1234&name=a.bin", content=b"x",
+                    headers={"content-length": str(3 * 1024**3)})
+    assert r.status_code in (400, 413)
+    assert not (tmp_path / "dosyalar" / "Gelen").exists() or not any((tmp_path / "dosyalar" / "Gelen").iterdir())
