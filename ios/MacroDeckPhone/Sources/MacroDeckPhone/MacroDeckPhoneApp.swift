@@ -162,7 +162,7 @@ struct ConnectView: View {
 
                 VStack(spacing: 14) {
                     field("PC adresi", icon: "desktopcomputer") {
-                        TextField("192.168.1.20", text: $host)
+                        TextField("masaustu-adi.local veya 192.168.1.20", text: $host)
                             .keyboardType(.numbersAndPunctuation)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()

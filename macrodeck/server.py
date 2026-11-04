@@ -273,7 +273,7 @@ def create_app(
     @app.get("/api/version")
     def get_version(request: Request, token: str | None = None):
         _require_auth(request, token)
-        return {"version": APP_VERSION}
+        return {"version": APP_VERSION, "host": app.state.deck_host}
 
     @app.get("/api/settings/autostart")
     def get_autostart(request: Request, token: str | None = None):
