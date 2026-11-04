@@ -18,7 +18,7 @@ private func isLocalHost(_ rawHost: String) -> Bool {
     guard labels.count == 4 else { return false }
     var n: [Int] = []
     for label in labels {
-        guard !label.isEmpty, label.allSatisfy({ $0.isASCII && $0.isNumber }), let v = UInt8(label) else { return false }
+        guard !label.isEmpty, !(label.count > 1 && label.first == "0"), label.allSatisfy({ $0.isASCII && $0.isNumber }), let v = UInt8(label) else { return false }
         n.append(Int(v))
     }
     return n[0] == 10 || (n[0] == 192 && n[1] == 168) || (n[0] == 172 && (16...31).contains(n[1])) || (n[0] == 169 && n[1] == 254)
