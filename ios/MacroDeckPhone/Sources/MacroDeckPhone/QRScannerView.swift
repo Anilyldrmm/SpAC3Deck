@@ -3,10 +3,25 @@ import SwiftUI
 
 /// PC'deki MacroDeck QR'ını okur: `http://<adres>:<port>/deck?token=<PIN>` → (adres:port, PIN).
 func parseDeckQR(_ text: String) -> (host: String, pin: String)? {
-    guard let url = URL(string: text), url.scheme == "http", let host = url.host, !host.isEmpty,
+    guard let url = URL(string: text), url.scheme == "http", url.path == "/deck",
+          url.user == nil, url.password == nil, let host = url.host, isLocalHost(host),
           let pin = URLComponents(url: url, resolvingAgainstBaseURL: false)?
               .queryItems?.first(where: { $0.name == "token" })?.value, !pin.isEmpty else { return nil }
     return ("\(host):\(url.port ?? 8765)", pin)
+}
+
+/// Yalnızca ev ağı adresleri: `.local`, 192.168/16, 10/8, 172.16/12, 169.254/16.
+private func isLocalHost(_ rawHost: String) -> Bool {
+    let host = rawHost.lowercased()
+    if host.range(of: #"^[a-z0-9-]{1,63}\.local$"#, options: .regularExpression) != nil { return true }
+    let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+    guard labels.count == 4 else { return false }
+    var n: [Int] = []
+    for label in labels {
+        guard !label.isEmpty, label.allSatisfy({ $0.isASCII && $0.isNumber }), let v = UInt8(label) else { return false }
+        n.append(Int(v))
+    }
+    return n[0] == 10 || (n[0] == 192 && n[1] == 168) || (n[0] == 172 && (16...31).contains(n[1])) || (n[0] == 169 && n[1] == 254)
 }
 
 struct QRScannerView: View {
