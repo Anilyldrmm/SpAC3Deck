@@ -255,12 +255,16 @@ final class DeckConnection {
 
     /// IP DHCP'de değişir; PC'nin `.local` adı sabit. Ad bu telefonda çözülüyorsa kayıtlı adresi ona çevir.
     private func adoptHostname(_ name: String) async {
+        guard name.range(of: #"^[a-z0-9-]{1,63}\.local$"#, options: .regularExpression) != nil else { return }
+        let (startHost, startPin) = (host, pin)
         let port = host.split(separator: ":", maxSplits: 1).dropFirst().first.map(String.init) ?? "8765"
         guard host.split(separator: ":").first.map(String.init) != name,
               var parts = URLComponents(string: "http://\(name):\(port)/api/version") else { return }
         parts.queryItems = [URLQueryItem(name: "token", value: pin)]
         guard let url = parts.url, let (_, response) = try? await rest.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+        // sorgu sürerken bağlantı değişmiş/kopmuşsa eski değerleri kaydetme
+        guard !Task.isCancelled, state == .connected, host == startHost, pin == startPin else { return }
         host = "\(name):\(port)"
         remember()
     }
