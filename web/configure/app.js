@@ -1,6 +1,10 @@
 // web/configure/app.js
 const TOKEN = new URLSearchParams(window.location.search).get("token");
 
+const CATEGORY_ICONS = {
+  "Uygulama & Oyun": "gamepad-2", "Ses (Voicemeeter)": "sliders-horizontal", "Discord": "headset",
+  "Medya": "music", "Soundboard": "audio-lines", "Makro": "workflow", "Genel": "settings",
+};
 const CATEGORIES = ["Uygulama & Oyun", "Ses (Voicemeeter)", "Discord", "Medya", "Soundboard", "Makro", "Genel"];
 
 function iconifyUrl(name) {
@@ -506,7 +510,7 @@ function renderLibrary(filterText = "") {
     heading.className = "library-category";
     const headingLogo = document.createElement("img");
     headingLogo.className = "library-category-logo";
-    headingLogo.src = "/deck/icon-192.png";
+    headingLogo.src = iconSrc(iconifyUrl(CATEGORY_ICONS[category] || "folder"));
     headingLogo.alt = "";
     const headingText = document.createElement("span");
     headingText.textContent = category;

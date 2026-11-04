@@ -415,7 +415,7 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
   margin: 18px 0 8px;
 }
 .library-category:first-of-type { margin-top: 0; }
-.library-category-logo { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.library-category-logo { width: 14px; height: 14px; flex: none; }
 .action-card {
   display: flex;
   align-items: center;
