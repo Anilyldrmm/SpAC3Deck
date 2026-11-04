@@ -18,6 +18,8 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <key>NSCameraUsageDescription</key>
+    <string>PC'deki MacroDeck QR kodunu okutup bağlanmak için gerekli.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>PC'den aldığın fotoğraf ve videolar galeriye kaydedilir.</string>
     <key>NSPhotoLibraryUsageDescription</key>

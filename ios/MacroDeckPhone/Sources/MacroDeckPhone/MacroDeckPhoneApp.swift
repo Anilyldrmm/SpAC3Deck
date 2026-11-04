@@ -143,6 +143,7 @@ struct ConnectView: View {
     @AppStorage("deckHost") private var host = ""
     @State private var pin = ""
     @FocusState private var focus: Field?
+    @State private var scanning = false
 
     private enum Field { case host, pin }
 
@@ -177,6 +178,13 @@ struct ConnectView: View {
                     }
                 }
 
+                Button { focus = nil; scanning = true } label: {
+                    Label("QR kodu okut", systemImage: "qrcode.viewfinder")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .foregroundStyle(Brand.accent)
+                }
+
                 if case .failed(let message) = deck.state {
                     Label(message, systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote).foregroundStyle(.red)
@@ -208,6 +216,13 @@ struct ConnectView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .onAppear { pin = PinStore.load() ?? "" }
+        .sheet(isPresented: $scanning) {
+            QRScannerView { scannedHost, scannedPin in
+                host = scannedHost
+                pin = scannedPin
+                deck.connect(host: scannedHost, pin: scannedPin, persistent: true)
+            }
+        }
     }
 
     private func field<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
