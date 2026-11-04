@@ -53,6 +53,14 @@ def monitors() -> list[tuple[int, int, int, int]]:
     return rects
 
 
+def monitor_at(rects: list[tuple[int, int, int, int]], x: int, y: int) -> int | None:
+    """(x, y) noktasini iceren monitorun indeksi; hicbirinde degilse None."""
+    for i, (left, top, right, bottom) in enumerate(rects):
+        if left <= x < right and top <= y < bottom:
+            return i
+    return None
+
+
 # --- DXGI yakalama ------------------------------------------------------------------------------
 
 _lock = threading.Lock()

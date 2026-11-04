@@ -2,7 +2,7 @@
 """Telefondan gelen fare/klavye mesajlarini dogrular ve os_bridge'e iletir."""
 from __future__ import annotations
 
-from . import os_bridge
+from . import os_bridge, screen
 
 MOUSE_BUTTONS = {"left", "right", "middle"}
 KEYS = {"enter", "backspace", "tab", "esc", "delete", "left", "right", "up", "down", "space"}
@@ -17,8 +17,24 @@ def _num(value, limit: int) -> int:
     return max(-limit, min(limit, int(value)))
 
 
-def handle(msg: dict, bridge=os_bridge) -> None:
+def _unit(value) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("sayi bekleniyordu")
+    return max(0.0, min(1.0, float(value)))
+
+
+def handle(msg: dict, bridge=os_bridge, monitors=screen.monitors) -> None:
     kind = msg.get("kind")
+    if kind == "abs":
+        # secili monitorun icinde 0..1 oranli mutlak konum (dogrudan dokunma modu)
+        rects = monitors()
+        index = msg.get("monitor")
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(rects):
+            raise ValueError("gecersiz monitor")
+        left, top, right, bottom = rects[index]
+        bridge.mouse_abs(left + round(_unit(msg.get("x")) * (right - left - 1)),
+                         top + round(_unit(msg.get("y")) * (bottom - top - 1)))
+        return
     if kind == "move":
         bridge.mouse_move(_num(msg.get("dx"), MAX_MOVE), _num(msg.get("dy"), MAX_MOVE))
     elif kind == "click" and msg.get("button", "left") in MOUSE_BUTTONS:

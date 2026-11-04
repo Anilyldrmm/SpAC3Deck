@@ -64,9 +64,15 @@ def test_clipboard_pc_to_phone_on_connect_and_phone_to_pc(tmp_path):
 def test_screen_stream_sends_frames_and_rejects_bad_pin(tmp_path):
     client, _ = build_client(tmp_path)
     client.app.state.screen_grab = lambda monitor=0, width=0: b"jpegbytes"
+    client.app.state.monitors = lambda: [(0, 0, 1920, 1080), (1920, 0, 3840, 1080)]
+    client.app.state.cursor_pos = lambda: (2880, 540)  # 2. monitorun ortasi
     with client.websocket_connect("/ws/screen?token=1234") as ws:
         assert ws.receive_bytes() == b"jpegbytes"
+        assert ws.receive_json() == {"monitor": 0, "cx": 1.5, "cy": 0.5}  # imlec bu monitorun disinda
         assert ws.receive_bytes() == b"jpegbytes"
+    with client.websocket_connect("/ws/screen?token=1234&follow=1") as ws:  # imlecin monitorune gecer
+        assert ws.receive_bytes() == b"jpegbytes"
+        assert ws.receive_json() == {"monitor": 1, "cx": 0.5, "cy": 0.5}
     import pytest
     from starlette.websockets import WebSocketDisconnect
     with pytest.raises(WebSocketDisconnect):
@@ -177,3 +183,15 @@ def test_outbox_drop_inbox_list_delete(tmp_path):
     assert client.delete("/api/inbox/b.txt" + q).status_code == 200
     assert client.delete("/api/outbox/a.txt" + q).status_code == 200
     assert client.delete("/api/outbox/a.txt?token=0000").status_code == 403
+
+
+def test_abs_maps_into_monitor_rect_and_rejects_bad_monitor():
+    r = Rec()
+    rects = lambda: [(0, 0, 1920, 1080), (1920, 0, 3840, 1080)]
+    handle({"kind": "abs", "monitor": 1, "x": 0.5, "y": 2}, r, rects)
+    handle({"kind": "abs", "monitor": 0, "x": 0, "y": 0}, r, rects)
+    assert r.calls == [("mouse_abs", 1920 + 960, 1079), ("mouse_abs", 0, 0)]
+    import pytest
+    for bad in (5, -1, True, "0"):
+        with pytest.raises(ValueError):
+            handle({"kind": "abs", "monitor": bad, "x": 0, "y": 0}, r, rects)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import hashlib
 import json
 import re
@@ -154,6 +155,7 @@ def create_app(
     app.state.files_dir = config_path.parent / "files"
     app.state.screen_grab = screen.grab_jpeg  # testlerde sahte
     app.state.monitors = screen.monitors
+    app.state.cursor_pos = screen._cursor_pos  # testlerde sahte
     app.state.input_handler = remote_input.handle  # testlerde sahte ile degistirilir
     app.state.bridge_token = load_or_create_bridge_token(
         config_path.parent / "bridge_token.txt"
@@ -659,15 +661,33 @@ def create_app(
         ]}
 
     @app.websocket("/ws/screen")
-    async def screen_endpoint(websocket: WebSocket, token: str, monitor: int = 0, width: int = screen.DEFAULT_WIDTH):
+    async def screen_endpoint(
+        websocket: WebSocket, token: str, monitor: int = 0, width: int = screen.DEFAULT_WIDTH, follow: int = 0
+    ):
         if not await _admit(websocket, token):
             return
         await websocket.accept()
         screen.stream_open()
+        last_info: tuple | None = None
+        last_sent = 0.0
         try:
             while True:
+                rects = app.state.monitors()
+                x, y = app.state.cursor_pos()
+                if follow:  # imlec baska monitore gecince yayin da oraya gecer
+                    under = screen.monitor_at(rects, x, y)
+                    if under is not None:
+                        monitor = under
                 frame = await asyncio.to_thread(app.state.screen_grab, monitor, width)
                 await websocket.send_bytes(frame)
+                # imlec konumu (yayinlanan monitore gore 0..1; disindaysa aralik disi) + hangi monitor
+                idx = monitor if 0 <= monitor < len(rects) else 0
+                left, top, right, bottom = rects[idx]
+                info = (idx, round((x - left) / max(right - left, 1), 3), round((y - top) / max(bottom - top, 1), 3))
+                now = time.monotonic()
+                if info != last_info and (info[0] != (last_info or (None,))[0] or now - last_sent >= 0.03):
+                    await websocket.send_json({"monitor": info[0], "cx": info[1], "cy": info[2]})
+                    last_info, last_sent = info, now
                 await asyncio.sleep(0)  # hiz yakalamadan gelir (dxgi 60 fps)
         except (WebSocketDisconnect, RuntimeError):
             pass

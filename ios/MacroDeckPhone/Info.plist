@@ -6,7 +6,7 @@
     <string>MacroDeck</string>
     <!-- her kurulumda artir: ayni surumde iOS eski ikonu onbellekte tutabilir -->
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
     <!-- MacroDeck sunucusu ev agindaki duz HTTP/WS; sadece yerel adreslere izin ver -->
     <key>NSAppTransportSecurity</key>
     <dict>

@@ -322,6 +322,7 @@ final class DeckConnection {
     }
 
     func move(dx: Double, dy: Double) { send(["type": "input", "kind": "move", "dx": dx, "dy": dy]) }
+    func absolute(monitor: Int, x: Double, y: Double) { send(["type": "input", "kind": "abs", "monitor": monitor, "x": x, "y": y]) }
     func click(_ button: String = "left") { send(["type": "input", "kind": "click", "button": button]) }
     func mouseButton(_ button: String, down: Bool) { send(["type": "input", "kind": "button", "button": button, "down": down]) }
     func scroll(_ steps: Int) { send(["type": "input", "kind": "scroll", "dy": steps]) }

@@ -26,6 +26,8 @@ struct TrackpadView: View {
     @AppStorage("naturalScroll") private var natural = true
     @AppStorage("autoLandscape") private var autoLandscape = true
     @AppStorage("padFill") private var fill = false
+    @AppStorage("padDirect") private var direct = true
+    @AppStorage("padFollow") private var follow = true
     @State private var stream = ScreenStream()
     @State private var showScreen = false
     @State private var showKeyboard = false
@@ -64,8 +66,18 @@ struct TrackpadView: View {
                     .foregroundStyle(.white.opacity(0.18))
                     .accessibilityHidden(true)
             }
+            if showScreen, let spot = cursorSpot() {
+                Circle()
+                    .strokeBorder(.white, lineWidth: 2)
+                    .background(Circle().fill(Brand.accent.opacity(0.55)))
+                    .frame(width: 18, height: 18)
+                    .position(spot)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
+            }
             PadSurface(
                 deck: deck, speed: speed, natural: natural,
+                directTo: direct && showScreen && stream.image != nil ? absolute : nil,
                 onZoom: applyZoom,
                 onExitFullscreen: { if fullscreen { fullscreen = false } }
             )
@@ -112,11 +124,36 @@ struct TrackpadView: View {
             }
         }
         .onChange(of: monitor) { _, _ in restartStream() }
+        .onChange(of: follow) { _, _ in restartStream() }
         .onChange(of: fullscreen) { _, on in
             restartStream() // tam ekranda daha keskin kare
             if on { flash("Çıkmak için dört parmakla dokun") }
         }
         .sheet(isPresented: $showHelp) { PadHelp() }
+    }
+
+    // MARK: Ekran ↔ dokunma eşlemesi
+
+    /// Gösterilen görüntünün (sığdır/doldur + yakınlaştırma + kaydırma dahil) ekrandaki dikdörtgeni.
+    private func shownRect() -> CGRect? {
+        guard let size = stream.image?.size, size.width > 0, size.height > 0, area.width > 0 else { return nil }
+        let s = fill ? max(area.width / size.width, area.height / size.height) : min(area.width / size.width, area.height / size.height)
+        let w = size.width * s * zoom, h = size.height * s * zoom
+        return CGRect(x: area.width / 2 - w / 2 + pan.width, y: area.height / 2 - h / 2 + pan.height, width: w, height: h)
+    }
+
+    /// Dokunulan noktayı yayınlanan PC monitöründe 0...1 oranına çevirip imleci oraya koyar.
+    private func absolute(_ point: CGPoint) {
+        guard let r = shownRect() else { return }
+        let x = min(1, max(0, (point.x - r.minX) / r.width))
+        let y = min(1, max(0, (point.y - r.minY) / r.height))
+        deck.absolute(monitor: stream.monitorIndex, x: x, y: y)
+    }
+
+    /// PC imlecinin telefon ekranındaki yeri; imleç bu monitörde değilse nil.
+    private func cursorSpot() -> CGPoint? {
+        guard let c = stream.cursor, (0...1).contains(c.x), (0...1).contains(c.y), let r = shownRect() else { return nil }
+        return CGPoint(x: r.minX + c.x * r.width, y: r.minY + c.y * r.height)
     }
 
     // MARK: Yakınlaştırma
@@ -163,6 +200,8 @@ struct TrackpadView: View {
             }
             if showScreen {
                 if monitors.count > 1 { monitorMenu }
+                barButton("hand.point.up.left", label: direct ? "İz pedi moduna geç" : "Doğrudan dokunmaya geç", on: direct) { direct.toggle() }
+                barButton("dot.viewfinder", label: follow ? "İmleç takibini kapat" : "İmleci takip et", on: follow) { follow.toggle() }
                 barButton("rectangle.arrowtriangle.2.outward", label: fill ? "Sığdır" : "Ekranı doldur", on: fill) { fill.toggle() }
                 barButton("arrow.up.left.and.arrow.down.right", label: "Tam ekran") { fullscreen = true }
             }
@@ -183,14 +222,15 @@ struct TrackpadView: View {
         Menu {
             ForEach(monitors) { m in
                 Button {
+                    follow = false
                     monitor = m.index
                 } label: {
                     Label("Ekran \(m.index + 1) (\(m.width)×\(m.height))" + (m.primary ? " · ana" : ""),
-                          systemImage: monitor == m.index ? "checkmark" : "display")
+                          systemImage: stream.monitorIndex == m.index ? "checkmark" : "display")
                 }
             }
         } label: {
-            Text("\(monitor + 1)")
+            Text("\(stream.monitorIndex + 1)")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
@@ -204,7 +244,9 @@ struct TrackpadView: View {
         let items = [
             URLQueryItem(name: "monitor", value: String(monitor)),
             URLQueryItem(name: "width", value: fullscreen ? "1600" : "1000"),
+            URLQueryItem(name: "follow", value: follow ? "1" : "0"),
         ]
+        stream.monitorIndex = monitor
         if let url = deck.wsURL("/ws/screen", items: items) { stream.start(url) }
     }
 
@@ -278,6 +320,8 @@ struct PadSurface: UIViewRepresentable {
     let deck: DeckConnection
     let speed: Double
     let natural: Bool
+    /// Doğrudan dokunma modunda dokunulan noktayı PC'ye mutlak konum olarak gönderir; nil = göreceli iz pedi.
+    var directTo: ((CGPoint) -> Void)?
     var onZoom: (CGFloat, CGSize) -> Void = { _, _ in }
     var onExitFullscreen: () -> Void = {}
 
@@ -296,9 +340,9 @@ struct PadSurface: UIViewRepresentable {
             view.addGestureRecognizer(g)
             return g
         }
-        _ = tap(1, #selector(Coordinator.leftTap))
-        _ = tap(2, #selector(Coordinator.rightTap))
-        _ = tap(3, #selector(Coordinator.middleTap))
+        _ = tap(1, #selector(Coordinator.leftTap(_:)))
+        _ = tap(2, #selector(Coordinator.rightTap(_:)))
+        _ = tap(3, #selector(Coordinator.middleTap(_:)))
         _ = tap(4, #selector(Coordinator.fourTap))
 
         let pinch = UIPinchGestureRecognizer(target: c, action: #selector(Coordinator.pinch(_:)))
@@ -332,6 +376,7 @@ struct PadSurface: UIViewRepresentable {
         c.deck = deck
         c.speed = speed
         c.natural = natural
+        c.directTo = directTo
         c.onZoom = onZoom
         c.onExitFullscreen = onExitFullscreen
     }
@@ -340,6 +385,7 @@ struct PadSurface: UIViewRepresentable {
         var deck: DeckConnection?
         var speed = 1.6
         var natural = true
+        var directTo: ((CGPoint) -> Void)?
         var onZoom: (CGFloat, CGSize) -> Void = { _, _ in }
         var onExitFullscreen: () -> Void = {}
         private var lastPinchCenter = CGPoint.zero
@@ -355,15 +401,22 @@ struct PadSurface: UIViewRepresentable {
             g is UILongPressGestureRecognizer || other is UILongPressGestureRecognizer
         }
 
-        @MainActor @objc func leftTap() {
+        @MainActor @objc func leftTap(_ g: UITapGestureRecognizer) {
             // sürükleme bırakıldıktan hemen sonra gelen tap'i yok say
             guard !dragging, Date().timeIntervalSince(dragEnded) > 0.2 else { return }
             light.impactOccurred(intensity: 0.5)
+            aim(g)
             deck?.click("left")
         }
 
-        @MainActor @objc func rightTap() { light.impactOccurred(); deck?.click("right") }
-        @MainActor @objc func middleTap() { light.impactOccurred(); deck?.click("middle") }
+        @MainActor @objc func rightTap(_ g: UITapGestureRecognizer) { light.impactOccurred(); aim(g); deck?.click("right") }
+        @MainActor @objc func middleTap(_ g: UITapGestureRecognizer) { light.impactOccurred(); aim(g); deck?.click("middle") }
+
+        /// Doğrudan dokunma modunda tıklamadan önce imleci dokunulan noktaya götürür.
+        @MainActor private func aim(_ g: UIGestureRecognizer) {
+            guard let directTo, let view = g.view else { return }
+            directTo(g.location(in: view))
+        }
         @MainActor @objc func fourTap() { heavy.impactOccurred(); onExitFullscreen() }
 
         /// İki parmakla aç/kıs: yakınlaştır; parmakların ortası kayarsa görüntü de kayar.
@@ -387,8 +440,9 @@ struct PadSurface: UIViewRepresentable {
             case .began:
                 moveRemainder = .zero
                 g.setTranslation(.zero, in: view)
+                if let directTo { directTo(g.location(in: view)) }
             case .changed:
-                send(pan: g, in: view)
+                if let directTo { directTo(g.location(in: view)) } else { send(pan: g, in: view) }
             default: break
             }
         }
@@ -401,9 +455,11 @@ struct PadSurface: UIViewRepresentable {
                 moveRemainder = .zero
                 lastDragPoint = g.location(in: view)
                 heavy.impactOccurred()
+                aim(g)
                 deck?.mouseButton("left", down: true)
             case .changed:
                 let point = g.location(in: view)
+                if let directTo { directTo(point); return }
                 let dx = point.x - lastDragPoint.x
                 let dy = point.y - lastDragPoint.y
                 lastDragPoint = point
@@ -518,6 +574,9 @@ final class KeyInputView: UIView, UIKeyInput {
 @MainActor @Observable
 final class ScreenStream {
     var image: UIImage?
+    /// Yayınlanan monitör (sunucu imleci takip ederken kendi değiştirir) ve imlecin o monitördeki 0...1 konumu.
+    var monitorIndex = 0
+    var cursor: CGPoint?
     private var socket: URLSessionWebSocketTask?
     private var task: Task<Void, Never>?
 
@@ -529,6 +588,11 @@ final class ScreenStream {
         task = Task {
             while !Task.isCancelled {
                 guard let message = try? await socket.receive() else { break }
+                if case .string(let text) = message,
+                   let info = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
+                    if let m = info["monitor"] as? Int { monitorIndex = m }
+                    if let cx = info["cx"] as? Double, let cy = info["cy"] as? Double { cursor = CGPoint(x: cx, y: cy) }
+                }
                 if case .data(let data) = message {
                     // 60 fps'te çözme ana iş parçacığını yormasın
                     let frame = await Task.detached(priority: .userInitiated) { UIImage(data: data)?.preparingForDisplay() }.value
@@ -544,5 +608,6 @@ final class ScreenStream {
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         image = nil
+        cursor = nil
     }
 }

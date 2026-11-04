@@ -59,6 +59,7 @@ _MOUSE_FLAGS = {
     "middle": (0x0020, 0x0040),  # MIDDLEDOWN, MIDDLEUP
 }
 _MOVE, _WHEEL = 0x0001, 0x0800
+_ABSOLUTE, _VIRTUALDESK = 0x8000, 0x4000
 _KEYEVENTF_KEYUP, _KEYEVENTF_UNICODE = 0x0002, 0x0004
 
 
@@ -91,6 +92,15 @@ def _mouse(flags: int, dx: int = 0, dy: int = 0, data: int = 0) -> _INPUT:
 
 def mouse_move(dx: int, dy: int) -> None:
     _send(_mouse(_MOVE, dx, dy))
+
+
+def mouse_abs(px: int, py: int) -> None:
+    """Imleci sanal masaustunde (px, py) piksel konumuna koyar (coklu monitorde dogru)."""
+    u = ctypes.windll.user32
+    vx, vy, vw, vh = (u.GetSystemMetrics(i) for i in (76, 77, 78, 79))  # SM_*VIRTUALSCREEN
+    ax = round((px - vx) * 65535 / max(vw - 1, 1))
+    ay = round((py - vy) * 65535 / max(vh - 1, 1))
+    _send(_mouse(_MOVE | _ABSOLUTE | _VIRTUALDESK, max(0, min(65535, ax)), max(0, min(65535, ay))))
 
 
 def mouse_click(button: str) -> None:
